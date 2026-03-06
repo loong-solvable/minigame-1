@@ -20,7 +20,10 @@ export function createRenderer(canvas, refs, state) {
   let viewW = 1;
   let viewH = 1;
 
-  loadArtAssets(art);
+  loadArtAssets(art, ({ progress }) => {
+    state.assetLoadProgress = progress;
+    state.assetsLoaded = progress >= 1;
+  });
 
   function roundedRectPath(x, y, w, h, r) {
     ctx.beginPath();
@@ -262,6 +265,264 @@ export function createRenderer(canvas, refs, state) {
     }
   }
 
+  function findOwnerColor(ownerId) {
+    if (!ownerId) return "";
+    const player = state.visualPlayers.get(ownerId);
+    if (player) return player.color;
+    const bot = state.visualBots.get(ownerId);
+    return bot ? bot.color : "";
+  }
+
+  function drawControlPoints() {
+    const turretImg = art.turret && art.turret.complete && art.turret.naturalWidth > 0 ? art.turret : null;
+    for (const controlPoint of state.controlPoints) {
+      const pulse = 0.92 + Math.sin(state.elapsed * 4 + (controlPoint.pulse || 0)) * 0.08;
+      const ownerColor = findOwnerColor(controlPoint.ownerId);
+      const ringColor = ownerColor || "rgba(255,255,255,0.42)";
+      const captureColor = ownerColor || "#ffd46d";
+
+      ctx.strokeStyle = ringColor;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(controlPoint.x, controlPoint.y, controlPoint.r * pulse, 0, Math.PI * 2);
+      ctx.stroke();
+
+      if (controlPoint.capture > 0.01) {
+        ctx.strokeStyle = captureColor;
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.arc(
+          controlPoint.x,
+          controlPoint.y,
+          controlPoint.r + 10,
+          -Math.PI / 2,
+          -Math.PI / 2 + Math.PI * 2 * controlPoint.capture
+        );
+        ctx.stroke();
+      }
+
+      if (turretImg) {
+        const size = controlPoint.ownerId ? 120 : 104;
+        ctx.save();
+        ctx.translate(controlPoint.x, controlPoint.y - 14);
+        if (ownerColor) {
+          ctx.shadowColor = ownerColor;
+          ctx.shadowBlur = 18;
+        }
+        ctx.drawImage(turretImg, -size * 0.5, -size * 0.5, size, size);
+        ctx.restore();
+      } else {
+        ctx.fillStyle = ownerColor || "#6d7890";
+        roundedRectPath(controlPoint.x - 24, controlPoint.y - 20, 48, 40, 10);
+        ctx.fill();
+      }
+    }
+  }
+
+  function drawSupportShots() {
+    for (const shot of state.turretShots) {
+      const color = shot.color || "#74e6ff";
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.arc(shot.x, shot.y, shot.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  function drawPopups() {
+    for (const popup of state.popups) {
+      const alpha = clamp((popup.lifeMs || 0) / Math.max(1, popup.maxLifeMs || 1), 0, 1);
+      const popScale = 1 + Math.sin((1 - alpha) * Math.PI) * 0.08;
+      const fontSize = Math.floor((popup.size || 24) * popScale);
+
+      ctx.globalAlpha = alpha;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = `${popup.weight || 700} ${fontSize}px Trebuchet MS`;
+      ctx.lineWidth = Math.max(2, fontSize * 0.12);
+      ctx.strokeStyle = "rgba(0,0,0,0.55)";
+      ctx.strokeText(popup.text, popup.x, popup.y);
+      ctx.shadowColor = popup.color || "#ffffff";
+      ctx.shadowBlur = fontSize * 0.42;
+      ctx.fillStyle = popup.color || "#ffffff";
+      ctx.fillText(popup.text, popup.x, popup.y);
+      ctx.shadowBlur = 0;
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawEventOverlay() {
+    const banner = state.eventBanner || { text: "", color: "#5ce1ff", ttlMs: 0, flash: 0 };
+
+    if (banner.flash > 0) {
+      const flash = clamp(banner.flash, 0, 0.8);
+      ctx.save();
+      ctx.globalAlpha = flash * 0.72;
+      ctx.fillStyle = banner.color || "#5ce1ff";
+      ctx.fillRect(0, 0, viewW, viewH);
+      ctx.globalAlpha = flash * 0.24;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, viewW, viewH);
+      ctx.restore();
+    }
+
+    if (banner.ttlMs <= 0 || !banner.text) {
+      return;
+    }
+
+    const w = Math.min(700, viewW * 0.93);
+    const h = 102;
+    const x = (viewW - w) * 0.5;
+    const y = 20 + Math.sin(state.elapsed * 12) * 2;
+    const pulse = 0.62 + Math.sin(state.elapsed * 19) * 0.38;
+
+    ctx.save();
+    const bg = ctx.createLinearGradient(x, y, x + w, y + h);
+    bg.addColorStop(0, "rgba(8,16,28,0.95)");
+    bg.addColorStop(1, "rgba(18,28,46,0.95)");
+    ctx.fillStyle = bg;
+    roundedRectPath(x, y, w, h, 18);
+    ctx.fill();
+
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = banner.color || "#5ce1ff";
+    roundedRectPath(x, y, w, h, 18);
+    ctx.stroke();
+
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(255,255,255,0.72)";
+    roundedRectPath(x + 3, y + 3, w - 6, h - 6, 15);
+    ctx.stroke();
+
+    ctx.globalAlpha = 0.18 + pulse * 0.24;
+    ctx.fillStyle = banner.color || "#5ce1ff";
+    roundedRectPath(x + 8, y + 8, w - 16, h - 16, 13);
+    ctx.fill();
+
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#ffffff";
+    ctx.shadowColor = banner.color || "#5ce1ff";
+    ctx.shadowBlur = 24;
+    ctx.font = "900 44px Trebuchet MS";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(banner.text, viewW * 0.5, y + h * 0.5 - 6);
+    ctx.shadowBlur = 0;
+
+    ctx.font = "700 19px Trebuchet MS";
+    ctx.fillStyle = "rgba(255,255,255,0.86)";
+    ctx.fillText("增益已生效", viewW * 0.5, y + h - 21);
+    ctx.restore();
+  }
+
+  function drawMatchTimerBar() {
+    if (state.phase !== "running") {
+      return;
+    }
+
+    const localTimeLeft = Math.max(0, state.timeLeftMs - (performance.now() - state.timeLeftSyncAt));
+    const matchDurationMs = Math.max(localTimeLeft, state.matchDurationMs || localTimeLeft || 1);
+    const progress = clamp(localTimeLeft / Math.max(1, matchDurationMs), 0, 1);
+    const mm = Math.floor(localTimeLeft / 60000);
+    const ss = Math.floor((localTimeLeft % 60000) / 1000).toString().padStart(2, "0");
+
+    const isCritical = localTimeLeft <= 10000;
+    const isWarning = !isCritical && localTimeLeft <= 30000;
+    const accent = isCritical ? "#ff7c7c" : isWarning ? "#ffd95f" : "#5ce1ff";
+    const pulse = isCritical ? 0.72 + Math.sin(state.elapsed * 18) * 0.22 : 0.66;
+
+    const w = Math.min(420, viewW * 0.72);
+    const h = 52;
+    const x = (viewW - w) * 0.5;
+    const y = 10;
+
+    ctx.save();
+    ctx.fillStyle = "rgba(7,14,24,0.8)";
+    roundedRectPath(x, y, w, h, 14);
+    ctx.fill();
+
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = accent;
+    roundedRectPath(x, y, w, h, 14);
+    ctx.stroke();
+
+    const barX = x + 14;
+    const barY = y + h - 16;
+    const barW = w - 28;
+    const barH = 7;
+    ctx.fillStyle = "rgba(255,255,255,0.16)";
+    roundedRectPath(barX, barY, barW, barH, 4);
+    ctx.fill();
+
+    if (progress > 0.001) {
+      ctx.globalAlpha = pulse;
+      ctx.fillStyle = accent;
+      roundedRectPath(barX, barY, Math.max(4, barW * progress), barH, 4);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#ffffff";
+    ctx.shadowColor = accent;
+    ctx.shadowBlur = isCritical ? 18 : 10;
+    ctx.font = "900 30px Trebuchet MS";
+    ctx.fillText(`${mm}:${ss}`, viewW * 0.5, y + h * 0.46);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  function drawRespawnOverlay() {
+    const self = state.visualPlayers.get(state.playerId) || null;
+    if (!self || self.alive || self.respawnMs <= 0) {
+      return;
+    }
+
+    const remainingMs = Math.max(0, self.respawnMs);
+    const totalMs = 3000;
+    const progress = clamp(1 - remainingMs / totalMs, 0, 1);
+    const countdown = clamp(Math.ceil(remainingMs / 1000), 1, 3);
+    const pulse = 1 + Math.sin(state.elapsed * 14) * 0.04;
+    const radius = Math.max(90, Math.min(viewW, viewH) * 0.16);
+
+    ctx.save();
+    ctx.fillStyle = "rgba(6,10,17,0.7)";
+    ctx.fillRect(0, 0, viewW, viewH);
+
+    ctx.lineWidth = 16;
+    ctx.strokeStyle = "rgba(255,255,255,0.16)";
+    ctx.beginPath();
+    ctx.arc(viewW * 0.5, viewH * 0.5, radius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = "#ff8f8f";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.arc(viewW * 0.5, viewH * 0.5, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
+    ctx.stroke();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.shadowColor = "#ff8f8f";
+    ctx.shadowBlur = 28;
+    const countFontSize = Math.floor(Math.max(84, Math.min(viewW, viewH) * 0.18) * pulse);
+    ctx.font = `900 ${countFontSize}px Trebuchet MS`;
+    ctx.fillText(String(countdown), viewW * 0.5, viewH * 0.5 + 4);
+    ctx.shadowBlur = 0;
+
+    ctx.font = "900 36px Trebuchet MS";
+    ctx.fillText("即将复活", viewW * 0.5, viewH * 0.5 - radius - 54);
+    ctx.font = "700 20px Trebuchet MS";
+    ctx.fillStyle = "rgba(255,255,255,0.86)";
+    ctx.fillText("准备重返战场", viewW * 0.5, viewH * 0.5 + radius + 44);
+    ctx.restore();
+  }
+
   function drawDino(unit) {
     if (!unit.alive) return;
     const pulse = 0.96 + Math.sin(state.elapsed * 6 + unit.displayMass) * 0.05;
@@ -414,13 +675,19 @@ export function createRenderer(canvas, refs, state) {
     ctx.save();
     ctx.translate(-camera.x, -camera.y);
     drawRoads();
+    drawControlPoints();
     drawCars();
     drawCrates();
     drawPickups();
     drawCivilians();
+    drawSupportShots();
     for (const bot of state.visualBots.values()) drawDino(bot);
     for (const player of state.visualPlayers.values()) drawDino(player);
+    drawPopups();
     ctx.restore();
+    drawEventOverlay();
+    drawMatchTimerBar();
+    drawRespawnOverlay();
     renderHud();
     updateHint();
   }

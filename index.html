@@ -81,6 +81,17 @@
     </div>
   </div>
 
+  <div id="loadingOverlay" class="overlay loadingOverlay hidden">
+    <div class="card loadingCard">
+      <h2>正在加载对局</h2>
+      <p id="loadingStatus" class="loadingStatus">正在准备资源...</p>
+      <div class="loadingProgressTrack">
+        <div id="loadingProgressFill" class="loadingProgressFill"></div>
+      </div>
+      <div id="loadingProgressText" class="loadingProgressText">0%</div>
+    </div>
+  </div>
+
   <script type="module" src="client/main.js"></script>
 </body>
 </html>

@@ -56,6 +56,7 @@ async function main() {
     minFoods: { civilians: 25, cars: 6, crates: 4 },
     targetCompetitors: 4
   });
+  assert.strictEqual(instance.app.config.playerRespawnDelayMs, 3000);
 
   const { port } = await instance.start(0);
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -67,7 +68,9 @@ async function main() {
     const indexHtml = await fetch(`${baseUrl}/`).then((res) => res.text());
     const clientJs = await fetch(`${baseUrl}/client/main.js`).then((res) => res.text());
     assert(indexHtml.includes("Dino Hole Rampage Online"));
+    assert(indexHtml.includes("loadingOverlay"));
     assert(clientJs.includes("createRenderer"));
+    assert(clientJs.includes("copyRoomCodeSafe"));
 
     alice = createClient(wsUrl);
     bob = createClient(wsUrl);
@@ -98,6 +101,13 @@ async function main() {
     assert.strictEqual(aliceSnapshot.players.length, 2);
     assert.strictEqual(bobSnapshot.players.length, 2);
     assert(aliceSnapshot.bots.length >= 2);
+    assert(Array.isArray(aliceSnapshot.controlPoints));
+    assert.strictEqual(aliceSnapshot.controlPoints.length, 3);
+    assert(Array.isArray(aliceSnapshot.turretShots));
+    assert(Array.isArray(aliceSnapshot.popups));
+    assert(aliceSnapshot.eventBanner && typeof aliceSnapshot.eventBanner === "object");
+    assert.strictEqual(aliceSnapshot.eventBanner.text, "MATCH START");
+    assert(aliceSnapshot.controlPoints.every((controlPoint) => typeof controlPoint.capture === "number"));
 
     const aliceSelf = aliceSnapshot.players.find((player) => player.id === aliceSnapshot.selfId);
     const bobSelf = bobSnapshot.players.find((player) => player.id === bobSnapshot.selfId);

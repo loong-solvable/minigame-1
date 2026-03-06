@@ -67,14 +67,18 @@ export function buildMap() {
 export function createArtStore() {
   return {
     background: null,
+    turret: null,
     avatars: Object.create(null),
+    totalAssets: 0,
+    loadedAssets: 0,
     loaded: false
   };
 }
 
-export function loadArtAssets(art) {
+export function loadArtAssets(art, onProgress = null) {
   const files = {
     background: "../assets/processed/scene_canyon_map.png",
+    turret: "../assets/processed/prop_turret_cannon.png",
     hero_beetle: "../assets/processed/hero_beetle.png",
     hero_mage: "../assets/processed/hero_mage.png",
     hero_archer: "../assets/processed/hero_archer.png",
@@ -86,8 +90,19 @@ export function loadArtAssets(art) {
   };
 
   let pending = 0;
+  art.totalAssets = Object.keys(files).length;
+  art.loadedAssets = 0;
+  art.loaded = art.totalAssets === 0;
   const done = () => {
+    art.loadedAssets += 1;
     pending -= 1;
+    if (typeof onProgress === "function") {
+      onProgress({
+        loaded: art.loadedAssets,
+        total: art.totalAssets,
+        progress: art.totalAssets > 0 ? art.loadedAssets / art.totalAssets : 1
+      });
+    }
     if (pending <= 0) {
       art.loaded = true;
     }
@@ -106,8 +121,12 @@ export function loadArtAssets(art) {
     art.background = img;
   });
 
+  loadImage(files.turret, (img) => {
+    art.turret = img;
+  });
+
   for (const key of Object.keys(files)) {
-    if (key === "background") continue;
+    if (key === "background" || key === "turret") continue;
     loadImage(files[key], (img) => {
       art.avatars[key] = img;
     });

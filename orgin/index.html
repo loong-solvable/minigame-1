@@ -1,0 +1,2296 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Dino Hole Rampage</title>
+  <style>
+    :root {
+      --bg: #24334a;
+      --panel: rgba(17, 24, 39, 0.75);
+      --text: #e6eef8;
+      --accent: #5ce1ff;
+      --accent-2: #ff39a2;
+      --good: #9cff68;
+      --danger: #ff5b5b;
+    }
+
+    * {
+      box-sizing: border-box;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 20% 10%, #4b668d 0%, #2f4564 40%, var(--bg) 100%);
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      color: var(--text);
+    }
+
+    #game {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #hud {
+      position: fixed;
+      inset: env(safe-area-inset-top, 10px) 10px auto 10px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 10px;
+      backdrop-filter: blur(4px);
+      padding: 8px 10px;
+      font-size: 14px;
+      line-height: 1.4;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    }
+
+    #leaderboard {
+      margin-top: 4px;
+      font-size: 13px;
+      white-space: pre-line;
+    }
+
+    #hint {
+      position: fixed;
+      left: 50%;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.45);
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      font-size: 13px;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    #overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(7, 11, 19, 0.5);
+      z-index: 4;
+      padding: 20px;
+    }
+
+    #overlayCard {
+      width: min(420px, 92vw);
+      background: linear-gradient(160deg, rgba(8, 16, 28, 0.95), rgba(18, 35, 56, 0.95));
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 14px;
+      padding: 18px 16px;
+      text-align: center;
+    }
+
+    #overlayCard h2 {
+      margin: 0 0 10px 0;
+      font-size: 28px;
+      letter-spacing: 0.5px;
+      color: var(--accent);
+      text-shadow: 0 0 12px rgba(92, 225, 255, 0.5);
+    }
+
+    #overlayCard p {
+      margin: 8px 0;
+      opacity: 0.95;
+      line-height: 1.5;
+      white-space: pre-line;
+    }
+
+    #restartBtn {
+      margin-top: 14px;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 999px;
+      font-size: 16px;
+      font-weight: 700;
+      color: #091224;
+      background: linear-gradient(90deg, var(--good), #5ce1ff);
+      cursor: pointer;
+    }
+
+    #difficultyOverlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(6, 10, 17, 0.78);
+      backdrop-filter: blur(4px);
+      z-index: 6;
+      padding: 16px;
+    }
+
+    #difficultyCard {
+      width: min(520px, 94vw);
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      background: linear-gradient(165deg, rgba(10, 22, 37, 0.96), rgba(19, 35, 56, 0.96));
+      box-shadow: 0 24px 54px rgba(0, 0, 0, 0.4);
+      padding: 20px 16px;
+      text-align: center;
+    }
+
+    #difficultyCard h2 {
+      margin: 0;
+      font-size: 32px;
+      letter-spacing: 1px;
+      color: #d7f3ff;
+      text-shadow: 0 0 14px rgba(92, 225, 255, 0.45);
+    }
+
+    #difficultyInfo {
+      margin: 10px auto 16px auto;
+      max-width: 460px;
+      font-size: 14px;
+      line-height: 1.45;
+      opacity: 0.95;
+      color: #ecf5ff;
+      white-space: pre-line;
+      min-height: 44px;
+    }
+
+    #difficultyButtons {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .difficultyBtn {
+      border: 1px solid rgba(255, 255, 255, 0.26);
+      border-radius: 12px;
+      padding: 12px 6px;
+      background: linear-gradient(170deg, rgba(35, 56, 84, 0.9), rgba(18, 31, 48, 0.9));
+      color: #f3f7ff;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: transform 0.1s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+
+    .difficultyBtn:active {
+      transform: translateY(1px) scale(0.99);
+    }
+
+    .difficultyBtn.active {
+      border-color: rgba(156, 255, 104, 0.85);
+      box-shadow: 0 0 0 2px rgba(156, 255, 104, 0.22), 0 8px 20px rgba(0, 0, 0, 0.28);
+      background: linear-gradient(170deg, rgba(39, 78, 110, 0.96), rgba(18, 40, 64, 0.96));
+    }
+
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="hud">
+    <div class="panel" id="stats"></div>
+    <div class="panel">
+      <strong>排行榜</strong>
+      <div id="leaderboard"></div>
+    </div>
+  </div>
+  <div id="hint">拖动屏幕或鼠标控制恐龙黑洞</div>
+  
+  <div id="difficultyOverlay">
+    <div id="difficultyCard">
+      <h2>&#x9009;&#x62e9;&#x96be;&#x5ea6;</h2>
+      <p id="difficultyInfo"></p>
+      <div id="difficultyButtons">
+        <button class="difficultyBtn" data-difficulty="medium">&#x4e2d;&#x7b49;</button>
+        <button class="difficultyBtn" data-difficulty="hard">&#x56f0;&#x96be;</button>
+        <button class="difficultyBtn" data-difficulty="hell">&#x5730;&#x72f1;</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="overlay">
+    <div id="overlayCard">
+      <h2 id="overlayTitle">游戏结束</h2>
+      <p id="overlayText"></p>
+      <button id="restartBtn">再来一局</button>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const statsEl = document.getElementById("stats");
+      const boardEl = document.getElementById("leaderboard");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const restartBtn = document.getElementById("restartBtn");
+      const hintEl = document.getElementById("hint");
+      const difficultyOverlay = document.getElementById("difficultyOverlay");
+      const difficultyInfoEl = document.getElementById("difficultyInfo");
+      const difficultyBtnEls = Array.from(document.querySelectorAll(".difficultyBtn"));
+
+      const world = { w: 2200, h: 3200 };
+      const roadW = 130;
+      const roadsX = [330, 770, 1210, 1650, 2010];
+      const roadsY = [260, 700, 1140, 1580, 2020, 2460, 2900];
+      const botPalette = ["#ffe34a", "#58e0ff", "#ff8c3a", "#8f7bff", "#8ff06d"];
+      const botNames = ["Alias", "Chikkernoth", "Butterfang", "Certron", "Megabite"];
+      const skinTones = ["#f8d8b7", "#ecc3a4", "#d9a67f", "#bf8b63", "#8d5c3f"];
+      const outfitColors = ["#56d3ff", "#ff8f63", "#72f39f", "#ffd95f", "#9c8dff", "#ff73ba"];
+      const carPaints = [
+        { body: "#fb5f5f", roof: "#fce2e2", trim: "#a32222" },
+        { body: "#4b79ff", roof: "#dce7ff", trim: "#1f3b88" },
+        { body: "#f7b438", roof: "#fff2d0", trim: "#956100" },
+        { body: "#31c289", roof: "#d6fff0", trim: "#0f6b4b" },
+        { body: "#aa77ff", roof: "#eee2ff", trim: "#5a2ca2" }
+      ];
+      const mapThemes = [
+        { grass: "#6db458", road: "#656c75", blockA: "#8bb6dc", blockB: "#c89a6f", blockC: "#7ec47e" },
+        { grass: "#5ea66b", road: "#58616d", blockA: "#7bc3d0", blockB: "#d1ab6f", blockC: "#88c07d" },
+        { grass: "#79ac54", road: "#636a72", blockA: "#95aec8", blockB: "#b99585", blockC: "#96c971" }
+      ];
+
+      let dpr = 1;
+      let viewW = 0;
+      let viewH = 0;
+      let lastTs = 0;
+      let running = false;
+      let pointer = null;
+      let pointerActive = false;
+      let hintTimer = 5.5;
+
+      const camera = { x: 0, y: 0 };
+      const popups = [];
+      const mapBlocks = [];
+      const civilians = [];
+      const cars = [];
+      const crates = [];
+      const pickups = [];
+      const bots = [];
+      const roadRects = [];
+      const controlPoints = [];
+      const turretShots = [];
+      const allyUnits = [];
+      const swarmBugs = [];
+
+      const randomProfile = {
+        crowdScale: 1,
+        trafficScale: 1,
+        crateScale: 1,
+        botAggro: 1,
+        eventInterval: 14,
+        mapTheme: 0
+      };
+
+      const activeEffects = {
+        speedBoost: 0,
+        magnet: 0,
+        shield: 0
+      };
+
+      const worldEvent = {
+        type: "",
+        label: "",
+        color: "#5ce1ff",
+        ttl: 0,
+        cooldown: 11,
+        spawnTick: 0,
+        impact: 0
+      };
+
+      const eventBanner = {
+        text: "",
+        color: "#5ce1ff",
+        ttl: 0,
+        flash: 0
+      };
+
+      const state = {
+        score: 0,
+        kills: 0,
+        elapsed: 0,
+        timeLeft: 90,
+        gameOver: false,
+        reason: ""
+      };
+
+      const difficultyPresets = {
+        medium: {
+          key: "medium",
+          label: "\u4e2d\u7b49",
+          title: "\u4e2d\u7b49\u5f3a\u5ea6",
+          hint: "AI\u4f1a\u4e3b\u52a8\u8ffd\u51fb\uff0c\u4f46\u4ecd\u7559\u6709\u53cd\u5236\u7a7a\u95f4\u3002",
+          timeLimit: 90,
+          playerStartMass: 26,
+          botMassMul: 1,
+          botMassAdd: 0,
+          botAggroMin: 1.1,
+          botAggroMax: 1.65,
+          crowdMin: 0.92,
+          crowdMax: 1.24,
+          trafficMin: 0.82,
+          trafficMax: 1.24,
+          crateMin: 0.8,
+          crateMax: 1.2,
+          eventMin: 10,
+          eventMax: 15.5,
+          spawnPickupCount: 4,
+          duelBoost: 0,
+          aiThinkMul: 1,
+          playerMoveMul: 1,
+          botPowerMul: 1,
+          eventWeights: { crowd: 0.3, traffic: 0.29, frenzy: 0.23, supply: 0.18 }
+        },
+        hard: {
+          key: "hard",
+          label: "\u56f0\u96be",
+          title: "\u9ad8\u538b\u5bf9\u6297",
+          hint: "AI\u654c\u610f\u63d0\u5347\uff0c\u968f\u673a\u4e8b\u4ef6\u66f4\u9891\u7e41\uff0c\u5bb9\u9519\u66f4\u4f4e\u3002",
+          timeLimit: 80,
+          playerStartMass: 24,
+          botMassMul: 1.18,
+          botMassAdd: 4,
+          botAggroMin: 1.75,
+          botAggroMax: 2.55,
+          crowdMin: 0.88,
+          crowdMax: 1.18,
+          trafficMin: 0.92,
+          trafficMax: 1.4,
+          crateMin: 0.76,
+          crateMax: 1.1,
+          eventMin: 8.2,
+          eventMax: 13.2,
+          spawnPickupCount: 3,
+          duelBoost: 0.09,
+          aiThinkMul: 0.82,
+          playerMoveMul: 0.96,
+          botPowerMul: 1.08,
+          eventWeights: { crowd: 0.24, traffic: 0.26, frenzy: 0.35, supply: 0.15 }
+        },
+        hell: {
+          key: "hell",
+          label: "\u5730\u72f1",
+          title: "\u6781\u9650\u5730\u72f1",
+          hint: "\u9ad8\u4fb5\u7565AI + \u9ad8\u9891\u72c2\u66b4\u4e8b\u4ef6\uff0c\u5931\u8bef\u51e0\u4e4e\u81f4\u547d\u3002",
+          timeLimit: 70,
+          playerStartMass: 22,
+          botMassMul: 1.36,
+          botMassAdd: 8,
+          botAggroMin: 2.45,
+          botAggroMax: 3.4,
+          crowdMin: 0.82,
+          crowdMax: 1.1,
+          trafficMin: 1,
+          trafficMax: 1.48,
+          crateMin: 0.68,
+          crateMax: 1,
+          eventMin: 7,
+          eventMax: 10.8,
+          spawnPickupCount: 2,
+          duelBoost: 0.18,
+          aiThinkMul: 0.66,
+          playerMoveMul: 0.92,
+          botPowerMul: 1.18,
+          eventWeights: { crowd: 0.18, traffic: 0.22, frenzy: 0.5, supply: 0.1 }
+        }
+      };
+
+      let currentDifficulty = "medium";
+      function getDifficultyPreset() {
+        return difficultyPresets[currentDifficulty] || difficultyPresets.medium;
+      }
+
+      const player = createDino("YOU", "#ff39a2", true);
+
+      const art = {
+        background: null,
+        avatars: Object.create(null),
+        turret: null,
+        allyMelee: [],
+        allyRanged: [],
+        enemyAnt: [],
+        loaded: false
+      };
+
+      const botAvatarKeys = [
+        "hero_archer",
+        "hero_guard",
+        "enemy_zhamao",
+        "enemy_diaomao",
+        "enemy_sanmao",
+        "enemy_ant_1"
+      ];
+
+      function loadArtAssets() {
+        const files = {
+          background: "assets/processed/scene_canyon_map.png",
+          hero_beetle: "assets/processed/hero_beetle.png",
+          hero_mage: "assets/processed/hero_mage.png",
+          hero_archer: "assets/processed/hero_archer.png",
+          hero_guard: "assets/processed/hero_guard.png",
+          enemy_zhamao: "assets/processed/enemy_zhamao.png",
+          enemy_diaomao: "assets/processed/enemy_diaomao.png",
+          enemy_sanmao: "assets/processed/enemy_sanmao.png",
+          enemy_ant_0: "assets/processed/enemy_ant_0.png",
+          enemy_ant_1: "assets/processed/enemy_ant_1.png",
+          enemy_ant_2: "assets/processed/enemy_ant_2.png",
+          turret: "assets/processed/prop_turret_cannon.png",
+          ally_melee_0: "assets/processed/ally_melee_0.png",
+          ally_melee_1: "assets/processed/ally_melee_1.png",
+          ally_melee_2: "assets/processed/ally_melee_2.png",
+          ally_ranged_0: "assets/processed/ally_ranged_0.png",
+          ally_ranged_1: "assets/processed/ally_ranged_1.png",
+          ally_ranged_2: "assets/processed/ally_ranged_2.png"
+        };
+
+        let pending = 0;
+        const done = () => {
+          pending -= 1;
+          if (pending <= 0) {
+            art.loaded = true;
+          }
+        };
+
+        const loadImage = (src, setFn) => {
+          const img = new Image();
+          pending += 1;
+          img.onload = done;
+          img.onerror = done;
+          img.src = src;
+          setFn(img);
+        };
+
+        loadImage(files.background, (img) => {
+          art.background = img;
+        });
+
+        for (const key of [
+          "hero_beetle",
+          "hero_mage",
+          "hero_archer",
+          "hero_guard",
+          "enemy_zhamao",
+          "enemy_diaomao",
+          "enemy_sanmao",
+          "enemy_ant_0",
+          "enemy_ant_1",
+          "enemy_ant_2"
+        ]) {
+          loadImage(files[key], (img) => {
+            art.avatars[key] = img;
+          });
+        }
+
+        loadImage(files.turret, (img) => {
+          art.turret = img;
+        });
+
+        ["ally_melee_0", "ally_melee_1", "ally_melee_2"].forEach((k, idx) => {
+          loadImage(files[k], (img) => {
+            art.allyMelee[idx] = img;
+          });
+        });
+
+        ["ally_ranged_0", "ally_ranged_1", "ally_ranged_2"].forEach((k, idx) => {
+          loadImage(files[k], (img) => {
+            art.allyRanged[idx] = img;
+          });
+        });
+
+        ["enemy_ant_0", "enemy_ant_1", "enemy_ant_2"].forEach((k, idx) => {
+          loadImage(files[k], (img) => {
+            art.enemyAnt[idx] = img;
+          });
+        });
+      }
+
+      function getAvatarImage(unit) {
+        if (!unit || !unit.avatarKey) return null;
+        const img = art.avatars[unit.avatarKey];
+        if (!img || !img.complete || img.naturalWidth === 0) return null;
+        return img;
+      }
+
+      function getAnimatedImage(list, phase = 0, speed = 9) {
+        if (!list || list.length === 0) return null;
+        const idx = Math.floor((state.elapsed * speed + phase) % list.length);
+        const img = list[(idx + list.length) % list.length];
+        if (!img || !img.complete || img.naturalWidth === 0) return null;
+        return img;
+      }
+
+      function createDino(name, color, isPlayer = false) {
+        return {
+          name,
+          color,
+          isPlayer,
+          x: world.w * (0.42 + Math.random() * 0.16),
+          y: world.h * (0.42 + Math.random() * 0.16),
+          tx: world.w * Math.random(),
+          ty: world.h * Math.random(),
+          angle: -Math.PI / 2,
+          speed: 230,
+          mass: isPlayer ? 26 : 20 + Math.random() * 50,
+          level: 1,
+          bodyR: 26,
+          holeR: 38,
+          aiThink: 0,
+          invincible: isPlayer ? 2.4 : 0.8,
+          avatarKey: isPlayer ? "hero_beetle" : ""
+        };
+      }
+
+      function clamp(v, min, max) {
+        return Math.max(min, Math.min(max, v));
+      }
+
+      function rand(min, max) {
+        return min + Math.random() * (max - min);
+      }
+
+      function pick(arr) {
+        return arr[(Math.random() * arr.length) | 0];
+      }
+
+      function dist2(ax, ay, bx, by) {
+        const dx = ax - bx;
+        const dy = ay - by;
+        return dx * dx + dy * dy;
+      }
+
+      function buildMap() {
+        roadRects.length = 0;
+        mapBlocks.length = 0;
+
+        for (const rx of roadsX) {
+          roadRects.push({ x: rx - roadW / 2, y: 0, w: roadW, h: world.h, type: "v" });
+        }
+        for (const ry of roadsY) {
+          roadRects.push({ x: 0, y: ry - roadW / 2, w: world.w, h: roadW, type: "h" });
+        }
+
+        const step = 220;
+        for (let y = 0; y < world.h; y += step) {
+          for (let x = 0; x < world.w; x += step) {
+            if (isRoad(x + step * 0.5, y + step * 0.5)) {
+              continue;
+            }
+            mapBlocks.push({
+              x: x + 8,
+              y: y + 8,
+              w: step - 16,
+              h: step - 16,
+              tint: Math.random()
+            });
+          }
+        }
+      }
+
+      function isRoad(x, y) {
+        for (const r of roadRects) {
+          if (x > r.x && x < r.x + r.w && y > r.y && y < r.y + r.h) {
+            return true;
+          }
+        }
+        return false;
+      }
+
+      function randomRoadPos() {
+        if (Math.random() < 0.52) {
+          const rx = roadsX[(Math.random() * roadsX.length) | 0];
+          return {
+            x: clamp(rx + rand(-roadW * 0.42, roadW * 0.42), 20, world.w - 20),
+            y: rand(20, world.h - 20)
+          };
+        }
+        const ry = roadsY[(Math.random() * roadsY.length) | 0];
+        return {
+          x: rand(20, world.w - 20),
+          y: clamp(ry + rand(-roadW * 0.42, roadW * 0.42), 20, world.h - 20)
+        };
+      }
+
+      function createCivilian() {
+        const p = randomRoadPos();
+        const rare = Math.random() < 0.12;
+        return {
+          x: p.x,
+          y: p.y,
+          r: rand(4.8, 6.3),
+          value: rare ? 4 : Math.random() < 0.28 ? 3 : 2,
+          skin: pick(skinTones),
+          shirt: pick(outfitColors),
+          pants: pick(outfitColors),
+          hair: Math.random() < 0.65 ? "#3a2a22" : "#6d4c34",
+          hat: Math.random() < 0.18,
+          bag: Math.random() < 0.2,
+          stride: rand(0, Math.PI * 2),
+          scale: rand(0.92, 1.08)
+        };
+      }
+
+      function createCar() {
+        const p = randomRoadPos();
+        const style = pick(carPaints);
+        const k = Math.random();
+        const model = k < 0.36 ? "compact" : k < 0.74 ? "sedan" : "van";
+        const w = model === "van" ? rand(34, 40) : model === "sedan" ? rand(30, 36) : rand(25, 31);
+        const h = model === "van" ? rand(15, 18) : model === "sedan" ? rand(13, 16) : rand(12, 15);
+        return {
+          x: p.x,
+          y: p.y,
+          w,
+          h,
+          rot: rand(0, Math.PI * 2),
+          value: model === "van" ? 5 : model === "sedan" ? 4 : 3,
+          model,
+          body: style.body,
+          roof: style.roof,
+          trim: style.trim,
+          stripe: Math.random() < 0.4,
+          blink: Math.random() < 0.26,
+          phase: rand(0, Math.PI * 2)
+        };
+      }
+
+      function createCrate() {
+        const p = randomRoadPos();
+        return {
+          x: p.x,
+          y: p.y,
+          r: rand(10, 14),
+          value: Math.floor(rand(5, 9))
+        };
+      }
+
+      function spawnPickup(forceType = "") {
+        const p = randomRoadPos();
+        let type = forceType;
+        if (!type) {
+          const r = Math.random();
+          type = r < 0.28 ? "speed" : r < 0.56 ? "magnet" : r < 0.82 ? "shield" : "beacon";
+        }
+        pickups.push({
+          x: p.x,
+          y: p.y,
+          type,
+          r: type === "beacon" ? 14 : 12,
+          rot: rand(0, Math.PI * 2),
+          phase: rand(0, Math.PI * 2)
+        });
+      }
+
+      function spawnFood() {
+        civilians.length = 0;
+        cars.length = 0;
+        crates.length = 0;
+
+        const peopleCount = Math.floor(320 * randomProfile.crowdScale);
+        const carCount = Math.floor(82 * randomProfile.trafficScale);
+        const crateCount = Math.floor(44 * randomProfile.crateScale);
+
+        for (let i = 0; i < peopleCount; i++) civilians.push(createCivilian());
+        for (let i = 0; i < carCount; i++) cars.push(createCar());
+        for (let i = 0; i < crateCount; i++) crates.push(createCrate());
+      }
+
+      function createControlPoints() {
+        controlPoints.length = 0;
+        const slots = [
+          { x: roadsX[1], y: roadsY[1] },
+          { x: roadsX[3], y: roadsY[3] },
+          { x: roadsX[2], y: roadsY[5] }
+        ];
+        for (const s of slots) {
+          controlPoints.push({
+            x: s.x,
+            y: s.y,
+            r: 115,
+            capture: 0,
+            owner: "neutral",
+            fireCd: rand(0.8, 1.8),
+            pulse: rand(0, Math.PI * 2)
+          });
+        }
+      }
+
+      function spawnSwarmBug() {
+        const edge = (Math.random() * 4) | 0;
+        let x = 0;
+        let y = 0;
+        if (edge === 0) {
+          x = rand(20, world.w - 20);
+          y = 20;
+        } else if (edge === 1) {
+          x = world.w - 20;
+          y = rand(20, world.h - 20);
+        } else if (edge === 2) {
+          x = rand(20, world.w - 20);
+          y = world.h - 20;
+        } else {
+          x = 20;
+          y = rand(20, world.h - 20);
+        }
+
+        swarmBugs.push({
+          x,
+          y,
+          tx: player.x,
+          ty: player.y,
+          speed: rand(145, 210),
+          r: rand(14, 18),
+          life: rand(10, 15),
+          phase: rand(0, Math.PI * 2)
+        });
+      }
+
+      function spawnSwarmBurst(count = 10) {
+        for (let i = 0; i < count; i++) {
+          spawnSwarmBug();
+        }
+      }
+
+      function summonAlly(kind = "melee", count = 1) {
+        for (let i = 0; i < count; i++) {
+          const a = {
+            kind,
+            x: clamp(player.x + rand(-90, 90), 20, world.w - 20),
+            y: clamp(player.y + rand(-90, 90), 20, world.h - 20),
+            tx: player.x,
+            ty: player.y,
+            speed: kind === "ranged" ? 230 : 245,
+            r: kind === "ranged" ? 26 : 30,
+            bodyR: kind === "ranged" ? 26 : 30,
+            life: kind === "ranged" ? 24 : 20,
+            aiThink: rand(0.1, 0.35),
+            shotCd: rand(0.2, 0.7),
+            phase: rand(0, 100)
+          };
+          allyUnits.push(a);
+        }
+      }
+
+      function spawnSupportShot(x, y, tx, ty, color = "#7ce9ff", damage = 7, radius = 9) {
+        const dx = tx - x;
+        const dy = ty - y;
+        const len = Math.hypot(dx, dy) || 1;
+        turretShots.push({
+          x,
+          y,
+          vx: (dx / len) * 560,
+          vy: (dy / len) * 560,
+          r: radius,
+          damage,
+          color,
+          ttl: 1.8
+        });
+      }
+
+      function weakenBot(bot, damage, x, y, color = "#7ce9ff") {
+        if (!bot) return;
+        const d = Math.min(Math.max(1, damage), Math.max(1, bot.mass - 14));
+        bot.mass -= d;
+        syncSize(bot);
+        addPopup(x, y, `-${Math.floor(d)}`, color, 0.9, 22, 800);
+        state.score += d * 2.2;
+
+        if (bot.mass <= 14.5) {
+          const p = randomRoadPos();
+          bot.x = p.x;
+          bot.y = p.y;
+          bot.tx = p.x;
+          bot.ty = p.y;
+          bot.mass = 18 + rand(8, 20);
+          bot.invincible = 1.2;
+          syncSize(bot);
+          state.score += 28;
+        }
+      }
+
+      function nearestBot(x, y, maxD = 9999) {
+        let best = null;
+        let best2 = maxD * maxD;
+        for (const b of bots) {
+          const d2v = dist2(x, y, b.x, b.y);
+          if (d2v < best2) {
+            best2 = d2v;
+            best = b;
+          }
+        }
+        return best;
+      }
+
+      function updateControlPoints(dt) {
+        for (const cp of controlPoints) {
+          cp.pulse += dt * 2.2;
+          const pr = cp.r + player.bodyR;
+          const nearPlayer = dist2(player.x, player.y, cp.x, cp.y) < pr * pr;
+
+          let pressure = 0;
+          for (const b of bots) {
+            if (dist2(b.x, b.y, cp.x, cp.y) < (cp.r + b.bodyR) * (cp.r + b.bodyR)) {
+              pressure += 1;
+            }
+          }
+
+          if (nearPlayer) {
+            cp.capture = clamp(cp.capture + dt * (0.24 - pressure * 0.03), 0, 1);
+          } else {
+            cp.capture = clamp(cp.capture - dt * (0.06 + pressure * 0.018), 0, 1);
+          }
+
+          const prevOwner = cp.owner;
+          if (cp.capture >= 0.98) {
+            cp.owner = "player";
+          } else if (cp.capture <= 0.02) {
+            cp.owner = "neutral";
+          }
+
+          if (prevOwner !== "player" && cp.owner === "player") {
+            addPopup(cp.x, cp.y - cp.r - 24, "OUTPOST ONLINE", "#67ddff", 2.2, 34, 900);
+            eventBanner.text = "OUTPOST CAPTURED";
+            eventBanner.color = "#67ddff";
+            eventBanner.ttl = Math.max(eventBanner.ttl, 3.6);
+            eventBanner.flash = Math.max(eventBanner.flash, 0.34);
+          }
+
+          if (cp.owner === "player") {
+            state.score += dt * 4.2;
+            cp.fireCd -= dt;
+            if (cp.fireCd <= 0) {
+              cp.fireCd = rand(1.0, 1.8);
+              const tgt = nearestBot(cp.x, cp.y, 820);
+              if (tgt) {
+                spawnSupportShot(cp.x, cp.y, tgt.x, tgt.y, "#74e6ff", 8.5, 10);
+              }
+            }
+          }
+        }
+      }
+
+      function updateSupportShots(dt) {
+        for (let i = turretShots.length - 1; i >= 0; i--) {
+          const s = turretShots[i];
+          s.x += s.vx * dt;
+          s.y += s.vy * dt;
+          s.ttl -= dt;
+
+          let hit = false;
+          for (const b of bots) {
+            const rr = (b.bodyR + s.r) * (b.bodyR + s.r);
+            if (dist2(s.x, s.y, b.x, b.y) <= rr) {
+              weakenBot(b, s.damage, s.x, s.y, s.color);
+              hit = true;
+              break;
+            }
+          }
+
+          if (hit || s.ttl <= 0 || s.x < -40 || s.y < -40 || s.x > world.w + 40 || s.y > world.h + 40) {
+            turretShots.splice(i, 1);
+          }
+        }
+      }
+
+      function updateAllies(dt) {
+        for (let i = allyUnits.length - 1; i >= 0; i--) {
+          const a = allyUnits[i];
+          a.life -= dt;
+          a.aiThink -= dt;
+          a.shotCd -= dt;
+
+          if (a.life <= 0) {
+            allyUnits.splice(i, 1);
+            continue;
+          }
+
+          const tgt = nearestBot(a.x, a.y, a.kind === "ranged" ? 620 : 420);
+          if (a.aiThink <= 0 || !tgt) {
+            a.aiThink = rand(0.18, 0.44);
+            if (tgt) {
+              a.tx = tgt.x + rand(-20, 20);
+              a.ty = tgt.y + rand(-20, 20);
+            } else {
+              a.tx = clamp(player.x + rand(-160, 160), 20, world.w - 20);
+              a.ty = clamp(player.y + rand(-160, 160), 20, world.h - 20);
+            }
+          }
+
+          moveUnit(a, dt, a.tx, a.ty, 1.02);
+
+          if (tgt && a.kind === "ranged" && a.shotCd <= 0) {
+            a.shotCd = rand(0.62, 0.96);
+            spawnSupportShot(a.x, a.y - 8, tgt.x, tgt.y, "#ffd46d", 6.8, 7);
+          }
+
+          if (tgt && a.kind === "melee") {
+            if (dist2(a.x, a.y, tgt.x, tgt.y) < 74 * 74 && a.shotCd <= 0) {
+              a.shotCd = rand(0.48, 0.75);
+              weakenBot(tgt, 7.2, tgt.x, tgt.y, "#ff9a66");
+            }
+          }
+        }
+      }
+
+      function updateSwarmBugs(dt) {
+        for (let i = swarmBugs.length - 1; i >= 0; i--) {
+          const s = swarmBugs[i];
+          s.life -= dt;
+          s.tx = player.x + Math.sin(state.elapsed * 3.2 + s.phase) * 42;
+          s.ty = player.y + Math.cos(state.elapsed * 2.8 + s.phase) * 42;
+
+          const dx = s.tx - s.x;
+          const dy = s.ty - s.y;
+          const len = Math.hypot(dx, dy) || 1;
+          s.x += (dx / len) * s.speed * dt;
+          s.y += (dy / len) * s.speed * dt;
+
+          if (s.life <= 0) {
+            swarmBugs.splice(i, 1);
+            continue;
+          }
+
+          const absorbR = Math.max(18, player.holeR * 0.54);
+          if (dist2(player.x, player.y, s.x, s.y) < absorbR * absorbR && player.level >= 4) {
+            gain(player, 2, s.x, s.y);
+            swarmBugs.splice(i, 1);
+            continue;
+          }
+
+          const hurtR = player.bodyR + s.r * 0.66;
+          if (dist2(player.x, player.y, s.x, s.y) < hurtR * hurtR) {
+            if (activeEffects.shield > 0) {
+              addPopup(s.x, s.y, "BLOCK", "#9ef3ff", 0.8, 22, 800);
+            } else {
+              player.mass = Math.max(14, player.mass - 3.2);
+              syncSize(player);
+              state.score = Math.max(0, state.score - 4);
+              addPopup(player.x, player.y - 16, "SWARM HIT", "#ff8f63", 1.0, 24, 900);
+              if (player.mass <= 14.2) {
+                endGame("Overrun by swarm");
+                return;
+              }
+            }
+            swarmBugs.splice(i, 1);
+            continue;
+          }
+
+          for (const b of bots) {
+            const rr = (b.bodyR + s.r * 0.6) ** 2;
+            if (dist2(b.x, b.y, s.x, s.y) < rr) {
+              b.mass += 1.3;
+              syncSize(b);
+              swarmBugs.splice(i, 1);
+              break;
+            }
+          }
+        }
+      }
+
+      function updateSupportSystems(dt) {
+        updateControlPoints(dt);
+        updateAllies(dt);
+        updateSupportShots(dt);
+        updateSwarmBugs(dt);
+      }
+
+      function spawnBots() {
+        bots.length = 0;
+        const preset = getDifficultyPreset();
+        const keys = botAvatarKeys.slice();
+        keys.sort(() => Math.random() - 0.5);
+        for (let i = 0; i < 5; i++) {
+          const b = createDino(botNames[i], botPalette[i], false);
+          b.mass = (22 + i * rand(18, 27)) * preset.botMassMul + preset.botMassAdd;
+          b.avatarKey = keys[i % keys.length];
+          syncSize(b);
+          bots.push(b);
+        }
+      }
+
+      function syncSize(unit) {
+        unit.level = clamp(1 + Math.floor(unit.mass / 20), 1, 14);
+        unit.bodyR = 17 + unit.level * 3.15;
+        unit.holeR = unit.bodyR + 9 + Math.sqrt(unit.mass) * 1.3;
+        unit.speed = clamp(250 - unit.level * 8, 140, 280);
+      }
+
+      function rollMatchModifiers() {
+        const preset = getDifficultyPreset();
+        randomProfile.crowdScale = rand(preset.crowdMin, preset.crowdMax);
+        randomProfile.trafficScale = rand(preset.trafficMin, preset.trafficMax);
+        randomProfile.crateScale = rand(preset.crateMin, preset.crateMax);
+        randomProfile.botAggro = rand(preset.botAggroMin, preset.botAggroMax);
+        randomProfile.eventInterval = rand(preset.eventMin, preset.eventMax);
+        randomProfile.mapTheme = (Math.random() * mapThemes.length) | 0;
+      }
+
+      function resetMatch() {
+        const preset = getDifficultyPreset();
+
+        state.score = 0;
+        state.kills = 0;
+        state.elapsed = 0;
+        state.timeLeft = preset.timeLimit;
+        state.gameOver = false;
+        state.reason = "";
+
+        hintTimer = 5.5;
+        hintEl.style.display = "block";
+        overlay.style.display = "none";
+        running = true;
+
+        activeEffects.speedBoost = 0;
+        activeEffects.magnet = 0;
+        activeEffects.shield = 0;
+
+        worldEvent.type = "";
+        worldEvent.label = "";
+        worldEvent.color = "#5ce1ff";
+        worldEvent.ttl = 0;
+        worldEvent.cooldown = rand(Math.max(4.8, preset.eventMin * 0.62), preset.eventMin * 1.08);
+        worldEvent.spawnTick = 0;
+        worldEvent.impact = 0;
+
+        eventBanner.text = "";
+        eventBanner.color = "#5ce1ff";
+        eventBanner.ttl = 0;
+        eventBanner.flash = 0;
+
+        rollMatchModifiers();
+
+        player.x = world.w * 0.5;
+        player.y = world.h * 0.52;
+        player.tx = player.x;
+        player.ty = player.y;
+        player.angle = -Math.PI / 2;
+        player.mass = preset.playerStartMass;
+        player.invincible = 2.4;
+        player.avatarKey = "hero_beetle";
+        syncSize(player);
+
+        spawnFood();
+        spawnBots();
+        createControlPoints();
+
+        pickups.length = 0;
+        turretShots.length = 0;
+        allyUnits.length = 0;
+        swarmBugs.length = 0;
+        for (let i = 0; i < preset.spawnPickupCount; i++) spawnPickup();
+
+        popups.length = 0;
+      }
+
+      function updateDifficultyInfo(key) {
+        const preset = difficultyPresets[key] || difficultyPresets.medium;
+        difficultyInfoEl.textContent = `${preset.title}\n${preset.hint}`;
+        for (const btn of difficultyBtnEls) {
+          btn.classList.toggle("active", btn.dataset.difficulty === preset.key);
+        }
+      }
+
+      function showDifficultySelect() {
+        running = false;
+        overlay.style.display = "none";
+        difficultyOverlay.style.display = "flex";
+        updateDifficultyInfo(currentDifficulty);
+      }
+
+      function startGameWithDifficulty(key) {
+        currentDifficulty = difficultyPresets[key] ? key : "medium";
+        difficultyOverlay.style.display = "none";
+        resetMatch();
+      }
+
+      function addPopup(x, y, text, color = "#ffffff", life = 0.9, size = 24, weight = 700) {
+        popups.push({
+          x,
+          y,
+          text,
+          color,
+          life,
+          maxLife: life,
+          size,
+          weight
+        });
+      }
+
+      function gain(unit, amount, x, y) {
+        unit.mass += amount;
+        syncSize(unit);
+        if (unit.isPlayer) {
+          state.score += amount * 2;
+          addPopup(x, y, "+" + amount, "#ffe66d");
+        }
+      }
+
+      function makeBotTarget(b) {
+        const preset = getDifficultyPreset();
+        let duelChance = 0.2 * randomProfile.botAggro + preset.duelBoost;
+        if (worldEvent.type === "frenzy") duelChance += 0.22;
+        duelChance = clamp(duelChance, 0.24, 0.92);
+
+        if (Math.random() < duelChance) {
+          const px = player.x + (player.tx - player.x) * 0.32;
+          const py = player.y + (player.ty - player.y) * 0.32;
+
+          if (b.mass < player.mass * 0.88 && Math.random() < 0.34 && worldEvent.type !== "frenzy") {
+            const dx = b.x - px;
+            const dy = b.y - py;
+            const len = Math.hypot(dx, dy) || 1;
+            b.tx = clamp(b.x + (dx / len) * rand(200, 340), 20, world.w - 20);
+            b.ty = clamp(b.y + (dy / len) * rand(200, 340), 20, world.h - 20);
+          } else {
+            b.tx = clamp(px + rand(-55, 55), 20, world.w - 20);
+            b.ty = clamp(py + rand(-55, 55), 20, world.h - 20);
+          }
+          return;
+        }
+
+        if (civilians.length > 0 && Math.random() < 0.52) {
+          const c = civilians[(Math.random() * civilians.length) | 0];
+          b.tx = c.x + rand(-24, 24);
+          b.ty = c.y + rand(-24, 24);
+        } else if (cars.length > 0 && Math.random() < 0.44) {
+          const car = cars[(Math.random() * cars.length) | 0];
+          b.tx = car.x;
+          b.ty = car.y;
+        } else {
+          const p = randomRoadPos();
+          b.tx = p.x;
+          b.ty = p.y;
+        }
+      }
+
+      function moveUnit(unit, dt, targetX, targetY, speedMul = 1) {
+        const dx = targetX - unit.x;
+        const dy = targetY - unit.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const step = unit.speed * speedMul * dt;
+        const ratio = step >= d ? 1 : step / d;
+        unit.x += dx * ratio;
+        unit.y += dy * ratio;
+        unit.x = clamp(unit.x, unit.bodyR + 10, world.w - unit.bodyR - 10);
+        unit.y = clamp(unit.y, unit.bodyR + 10, world.h - unit.bodyR - 10);
+        unit.angle = Math.atan2(dy, dx);
+      }
+
+      function absorbFood(unit) {
+        let hole = unit.holeR;
+        if (unit.isPlayer && activeEffects.magnet > 0) {
+          hole *= 1.9;
+        }
+        const hole2 = hole * hole;
+
+        for (let i = civilians.length - 1; i >= 0; i--) {
+          const c = civilians[i];
+          if (dist2(unit.x, unit.y, c.x, c.y) < hole2) {
+            civilians.splice(i, 1);
+            gain(unit, c.value, c.x, c.y);
+          }
+        }
+
+        for (let i = cars.length - 1; i >= 0; i--) {
+          const c = cars[i];
+          if (dist2(unit.x, unit.y, c.x, c.y) < (hole - 4) * (hole - 4)) {
+            cars.splice(i, 1);
+            gain(unit, c.value, c.x, c.y);
+          }
+        }
+
+        if (unit.level >= 4) {
+          for (let i = crates.length - 1; i >= 0; i--) {
+            const c = crates[i];
+            if (dist2(unit.x, unit.y, c.x, c.y) < (hole - 2) * (hole - 2)) {
+              crates.splice(i, 1);
+              gain(unit, c.value, c.x, c.y);
+            }
+          }
+        }
+
+        const minCivil = Math.floor(120 * randomProfile.crowdScale);
+        if (civilians.length < minCivil) {
+          const add = Math.floor(9 + randomProfile.crowdScale * 7);
+          for (let i = 0; i < add; i++) civilians.push(createCivilian());
+        }
+
+        const minCars = Math.floor(28 * randomProfile.trafficScale);
+        if (cars.length < minCars) {
+          const add = Math.floor(3 + randomProfile.trafficScale * 3);
+          for (let i = 0; i < add; i++) cars.push(createCar());
+        }
+
+        const minCrate = Math.floor(16 * randomProfile.crateScale);
+        if (crates.length < minCrate) {
+          const add = Math.max(1, Math.floor(1 + randomProfile.crateScale));
+          for (let i = 0; i < add; i++) crates.push(createCrate());
+        }
+      }
+
+      function applyPickup(type, x, y) {
+        if (type === "speed") {
+          activeEffects.speedBoost = Math.max(activeEffects.speedBoost, 12);
+          addPopup(x, y, "Speed x1.78", "#ffd44d", 2.2, 32, 900);
+          eventBanner.text = "SPEED BOOST";
+          eventBanner.color = "#ffd44d";
+          eventBanner.ttl = Math.max(eventBanner.ttl, 3.2);
+          eventBanner.flash = Math.max(eventBanner.flash, 0.32);
+        } else if (type === "magnet") {
+          activeEffects.magnet = Math.max(activeEffects.magnet, 14);
+          addPopup(x, y, "Magnet x1.90", "#67ddff", 2.2, 32, 900);
+          eventBanner.text = "MEGA MAGNET";
+          eventBanner.color = "#67ddff";
+          eventBanner.ttl = Math.max(eventBanner.ttl, 3.2);
+          eventBanner.flash = Math.max(eventBanner.flash, 0.32);
+        } else if (type === "shield") {
+          activeEffects.shield = Math.max(activeEffects.shield, 24);
+          addPopup(x, y, "Shield Ready", "#9ef3ff", 2.4, 34, 900);
+          eventBanner.text = "SHIELD ON";
+          eventBanner.color = "#9ef3ff";
+          eventBanner.ttl = Math.max(eventBanner.ttl, 3.4);
+          eventBanner.flash = Math.max(eventBanner.flash, 0.35);
+        } else if (type === "beacon") {
+          summonAlly("melee", 1);
+          summonAlly("ranged", 1);
+          addPopup(x, y, "Allies Deployed", "#a0ff8a", 2.4, 34, 900);
+          eventBanner.text = "ALLY DROP";
+          eventBanner.color = "#a0ff8a";
+          eventBanner.ttl = Math.max(eventBanner.ttl, 3.8);
+          eventBanner.flash = Math.max(eventBanner.flash, 0.35);
+        }
+        state.score += 26;
+      }
+
+      function triggerWorldEvent() {
+        const preset = getDifficultyPreset();
+        const weights = preset.eventWeights;
+        const roll = Math.random();
+        const crowdEdge = weights.crowd;
+        const trafficEdge = crowdEdge + weights.traffic;
+        const frenzyEdge = trafficEdge + weights.frenzy;
+
+        worldEvent.spawnTick = 0;
+
+        if (roll < crowdEdge) {
+          worldEvent.type = "crowd";
+          worldEvent.label = "Crowd Surge";
+          worldEvent.color = "#67ddff";
+          worldEvent.ttl = 8;
+        } else if (roll < trafficEdge) {
+          worldEvent.type = "traffic";
+          worldEvent.label = "Traffic Surge";
+          worldEvent.color = "#ffcb61";
+          worldEvent.ttl = 8;
+        } else if (roll < frenzyEdge) {
+          worldEvent.type = "frenzy";
+          worldEvent.label = "Frenzy Mode";
+          worldEvent.color = "#ff6a6a";
+          worldEvent.ttl = 7;
+        } else {
+          const swarmChance = currentDifficulty === "hell" ? 0.56 : currentDifficulty === "hard" ? 0.42 : 0.3;
+          if (Math.random() < swarmChance) {
+            worldEvent.type = "swarm";
+            worldEvent.label = "Swarm Breach";
+            worldEvent.color = "#ff9d66";
+            worldEvent.ttl = 8.5;
+            spawnSwarmBurst(currentDifficulty === "hell" ? 16 : currentDifficulty === "hard" ? 12 : 9);
+          } else {
+            worldEvent.type = "supply";
+            worldEvent.label = "Supply Drop";
+            worldEvent.color = "#8effb5";
+            worldEvent.ttl = 6;
+            spawnPickup();
+            spawnPickup();
+          }
+        }
+
+        worldEvent.impact = 1.8;
+        eventBanner.text = worldEvent.label.toUpperCase();
+        eventBanner.color = worldEvent.color;
+        eventBanner.ttl = 5.2;
+        eventBanner.flash = 0.5;
+
+        addPopup(player.x, player.y - player.holeR - 24, worldEvent.label, worldEvent.color, 3.1, 40, 900);
+        worldEvent.cooldown = rand(randomProfile.eventInterval * 0.66, randomProfile.eventInterval * 1.16);
+      }
+
+      function updateRandomSystems(dt) {
+        activeEffects.speedBoost = Math.max(0, activeEffects.speedBoost - dt);
+        activeEffects.magnet = Math.max(0, activeEffects.magnet - dt);
+        activeEffects.shield = Math.max(0, activeEffects.shield - dt);
+
+        eventBanner.ttl = Math.max(0, eventBanner.ttl - dt);
+        eventBanner.flash = Math.max(0, eventBanner.flash - dt * 0.38);
+        worldEvent.impact = Math.max(0, worldEvent.impact - dt * 0.85);
+
+        worldEvent.cooldown -= dt;
+        if (worldEvent.cooldown <= 0 && worldEvent.ttl <= 0) {
+          triggerWorldEvent();
+        }
+
+        if (worldEvent.ttl > 0) {
+          worldEvent.ttl -= dt;
+          worldEvent.spawnTick += dt;
+
+          if (worldEvent.type === "crowd") {
+            while (worldEvent.spawnTick >= 0.36) {
+              worldEvent.spawnTick -= 0.36;
+              for (let i = 0; i < 4; i++) civilians.push(createCivilian());
+            }
+          } else if (worldEvent.type === "traffic") {
+            while (worldEvent.spawnTick >= 0.6) {
+              worldEvent.spawnTick -= 0.6;
+              cars.push(createCar());
+            }
+          } else if (worldEvent.type === "supply") {
+            while (worldEvent.spawnTick >= 1.25) {
+              worldEvent.spawnTick -= 1.25;
+              spawnPickup();
+            }
+          } else if (worldEvent.type === "swarm") {
+            while (worldEvent.spawnTick >= 0.42) {
+              worldEvent.spawnTick -= 0.42;
+              spawnSwarmBurst(currentDifficulty === "hell" ? 3 : 2);
+            }
+          }
+
+          if (worldEvent.ttl <= 0) {
+            worldEvent.ttl = 0;
+            worldEvent.type = "";
+            worldEvent.label = "";
+            worldEvent.color = "#5ce1ff";
+            worldEvent.spawnTick = 0;
+          }
+        }
+
+        if (pickups.length < 3 && Math.random() < dt * 0.62) {
+          spawnPickup();
+        }
+      }
+
+      function handleBattles() {
+        for (const b of bots) {
+          const rr = player.bodyR + b.bodyR;
+          if (dist2(player.x, player.y, b.x, b.y) > rr * rr) {
+            continue;
+          }
+          if (player.invincible > 0 || b.invincible > 0) {
+            continue;
+          }
+
+          const preset = getDifficultyPreset();
+          const playerPower = player.mass * 1.03 + player.level * 7;
+          const botPower = (b.mass + b.level * 8.5) * preset.botPowerMul;
+          if (playerPower >= botPower) {
+            state.kills += 1;
+            state.score += 42;
+            addPopup(b.x, b.y, "KO!", "#9cff68");
+            player.mass += Math.max(8, Math.floor(b.mass * 0.22));
+            syncSize(player);
+            b.mass = Math.max(18, Math.floor(player.mass * 0.55 - rand(5, 18)));
+            syncSize(b);
+            const p = randomRoadPos();
+            b.x = p.x;
+            b.y = p.y;
+            b.tx = p.x;
+            b.ty = p.y;
+            b.invincible = 1.2;
+          } else if (activeEffects.shield > 0) {
+            activeEffects.shield = 0;
+            player.invincible = 1.7;
+            b.invincible = 1.1;
+            const dx = player.x - b.x;
+            const dy = player.y - b.y;
+            const len = Math.hypot(dx, dy) || 1;
+            player.x = clamp(player.x + (dx / len) * 150, player.bodyR + 10, world.w - player.bodyR - 10);
+            player.y = clamp(player.y + (dy / len) * 150, player.bodyR + 10, world.h - player.bodyR - 10);
+            addPopup(player.x, player.y - 14, "SHIELD BLOCK", "#9ef3ff", 2.0, 36, 900);
+          } else {
+            endGame("Defeated by stronger dinosaur");
+            return;
+          }
+        }
+
+        for (let i = 0; i < bots.length; i++) {
+          for (let j = i + 1; j < bots.length; j++) {
+            const a = bots[i];
+            const b = bots[j];
+            const rr = a.bodyR + b.bodyR;
+            if (dist2(a.x, a.y, b.x, b.y) > rr * rr) {
+              continue;
+            }
+            if (a.invincible > 0 || b.invincible > 0) {
+              continue;
+            }
+            const aPower = a.mass + a.level * 8;
+            const bPower = b.mass + b.level * 8;
+            if (aPower >= bPower) {
+              a.mass += Math.max(5, Math.floor(b.mass * 0.12));
+              syncSize(a);
+              b.mass = Math.max(16, b.mass * 0.56);
+              syncSize(b);
+              const p = randomRoadPos();
+              b.x = p.x;
+              b.y = p.y;
+              b.tx = p.x;
+              b.ty = p.y;
+              b.invincible = 1;
+            } else {
+              b.mass += Math.max(5, Math.floor(a.mass * 0.12));
+              syncSize(b);
+              a.mass = Math.max(16, a.mass * 0.56);
+              syncSize(a);
+              const p = randomRoadPos();
+              a.x = p.x;
+              a.y = p.y;
+              a.tx = p.x;
+              a.ty = p.y;
+              a.invincible = 1;
+            }
+          }
+        }
+      }
+
+      function updateCamera(dt) {
+        const tx = clamp(player.x - viewW * 0.5, 0, world.w - viewW);
+        const ty = clamp(player.y - viewH * 0.5, 0, world.h - viewH);
+        camera.x += (tx - camera.x) * Math.min(1, dt * 8);
+        camera.y += (ty - camera.y) * Math.min(1, dt * 8);
+      }
+
+      function update(dt) {
+        if (!running) return;
+
+        state.elapsed += dt;
+        state.timeLeft -= dt;
+        if (state.timeLeft <= 0) {
+          state.timeLeft = 0;
+          endGame("Time up, ranking settled");
+          return;
+        }
+
+        if (hintTimer > 0) {
+          hintTimer -= dt;
+          if (hintTimer <= 0) {
+            hintEl.style.display = "none";
+          }
+        }
+
+        player.invincible = Math.max(0, player.invincible - dt);
+        for (const b of bots) {
+          b.invincible = Math.max(0, b.invincible - dt);
+        }
+
+        updateRandomSystems(dt);
+        updateSupportSystems(dt);
+
+        if (pointerActive && pointer) {
+          player.tx = pointer.x + camera.x;
+          player.ty = pointer.y + camera.y;
+        }
+
+        const preset = getDifficultyPreset();
+        const playerSpeedMul = (1 + (activeEffects.speedBoost > 0 ? 0.78 : 0)) * preset.playerMoveMul;
+        moveUnit(player, dt, player.tx, player.ty, playerSpeedMul);
+        absorbFood(player);
+
+        for (let i = pickups.length - 1; i >= 0; i--) {
+          const p = pickups[i];
+          if (dist2(player.x, player.y, p.x, p.y) < (player.holeR + p.r) * (player.holeR + p.r)) {
+            pickups.splice(i, 1);
+            applyPickup(p.type, p.x, p.y);
+          }
+        }
+
+        for (const b of bots) {
+          b.aiThink -= dt;
+          if (b.aiThink <= 0 || dist2(b.x, b.y, b.tx, b.ty) < 36 * 36) {
+            makeBotTarget(b);
+            b.aiThink = (rand(0.16, 0.58) * preset.aiThinkMul) / randomProfile.botAggro;
+          }
+          const frenzyMul = worldEvent.type === "frenzy" ? 1.34 : 1;
+          moveUnit(b, dt, b.tx, b.ty, frenzyMul);
+          absorbFood(b);
+        }
+
+        handleBattles();
+        updateCamera(dt);
+
+        for (let i = popups.length - 1; i >= 0; i--) {
+          const p = popups[i];
+          const rise = 22 + (p.size || 24) * 0.85;
+          p.y -= rise * dt;
+          p.life -= dt;
+          if (p.life <= 0) {
+            popups.splice(i, 1);
+          }
+        }
+      }
+
+      function roundedRectPath(x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+      }
+
+      function drawRoads() {
+        const theme = mapThemes[randomProfile.mapTheme];
+        const bg = art.background;
+        const bgReady = !!(bg && bg.complete && bg.naturalWidth > 0);
+        const mapNative = bgReady && bg.naturalWidth >= world.w && bg.naturalHeight >= world.h;
+
+        if (bgReady) {
+          if (mapNative) {
+            ctx.drawImage(bg, 0, 0, world.w, world.h);
+          } else {
+            const tw = bg.naturalWidth;
+            const th = bg.naturalHeight;
+            for (let y = 0; y < world.h; y += th) {
+              for (let x = 0; x < world.w; x += tw) {
+                ctx.drawImage(bg, x, y, tw, th);
+              }
+            }
+          }
+          ctx.fillStyle = mapNative ? "rgba(8,18,28,0.02)" : "rgba(8,18,28,0.05)";
+          ctx.fillRect(0, 0, world.w, world.h);
+        } else {
+          ctx.fillStyle = theme.grass;
+          ctx.fillRect(0, 0, world.w, world.h);
+
+          for (const b of mapBlocks) {
+            ctx.fillStyle = b.tint > 0.6 ? theme.blockB : b.tint > 0.3 ? theme.blockA : theme.blockC;
+            ctx.fillRect(b.x, b.y, b.w, b.h);
+            ctx.fillStyle = "rgba(0,0,0,0.08)";
+            ctx.fillRect(b.x + 6, b.y + 6, b.w - 12, b.h - 12);
+          }
+        }
+
+        ctx.fillStyle = bgReady ? (mapNative ? "rgba(18,22,30,0.08)" : "rgba(80, 90, 102, 0.72)") : theme.road;
+        for (const r of roadRects) {
+          ctx.fillRect(r.x, r.y, r.w, r.h);
+        }
+
+        if (!mapNative) {
+          ctx.strokeStyle = "rgba(255,255,255,0.72)";
+          ctx.lineWidth = 3;
+          ctx.setLineDash([20, 20]);
+          for (const rx of roadsX) {
+            ctx.beginPath();
+            ctx.moveTo(rx, 0);
+            ctx.lineTo(rx, world.h);
+            ctx.stroke();
+          }
+          for (const ry of roadsY) {
+            ctx.beginPath();
+            ctx.moveTo(0, ry);
+            ctx.lineTo(world.w, ry);
+            ctx.stroke();
+          }
+          ctx.setLineDash([]);
+        }
+      }
+
+      function drawCivilians() {
+        for (const c of civilians) {
+          const bob = Math.sin(state.elapsed * 6 + c.stride) * 1.4;
+          const walk = Math.sin(state.elapsed * 10 + c.stride) * 0.9;
+          const size = c.scale;
+
+          ctx.fillStyle = "rgba(0,0,0,0.22)";
+          ctx.beginPath();
+          ctx.ellipse(c.x, c.y + 10, 5.2 * size, 2.3 * size, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          if (c.hat) {
+            ctx.fillStyle = "#29354d";
+            ctx.beginPath();
+            ctx.ellipse(c.x, c.y - 8 + bob, 4.3 * size, 1.3 * size, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          ctx.fillStyle = c.hair;
+          ctx.beginPath();
+          ctx.arc(c.x, c.y - 5 + bob, 3.9 * size, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = c.skin;
+          ctx.beginPath();
+          ctx.arc(c.x, c.y - 4 + bob, 3.2 * size, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = c.shirt;
+          roundedRectPath(c.x - 3.8 * size, c.y - 1 + bob, 7.6 * size, 8.2 * size, 2.2 * size);
+          ctx.fill();
+
+          ctx.strokeStyle = c.pants;
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.moveTo(c.x - 1.3 * size, c.y + 7 + bob);
+          ctx.lineTo(c.x - 2.5 * size + walk, c.y + 11 + bob);
+          ctx.moveTo(c.x + 1.3 * size, c.y + 7 + bob);
+          ctx.lineTo(c.x + 2.5 * size - walk, c.y + 11 + bob);
+          ctx.stroke();
+
+          if (c.bag) {
+            ctx.fillStyle = "#3e4b6b";
+            roundedRectPath(c.x + 2.6 * size, c.y + 1 + bob, 2.2 * size, 3.5 * size, 0.8 * size);
+            ctx.fill();
+          }
+        }
+      }
+
+      function drawCars() {
+        for (const c of cars) {
+          const pulse = 0.93 + Math.sin(state.elapsed * 3.2 + c.phase) * 0.04;
+          ctx.save();
+          ctx.translate(c.x, c.y);
+          ctx.rotate(c.rot);
+
+          ctx.fillStyle = "rgba(0,0,0,0.22)";
+          roundedRectPath(-c.w * 0.52, -c.h * 0.44, c.w * 1.04, c.h * 0.9, c.h * 0.24);
+          ctx.fill();
+
+          ctx.fillStyle = c.body;
+          roundedRectPath(-c.w * 0.5, -c.h * 0.52, c.w, c.h * 1.04, c.h * 0.28);
+          ctx.fill();
+
+          const roofW = c.model === "van" ? c.w * 0.58 : c.w * 0.48;
+          const roofH = c.model === "compact" ? c.h * 0.44 : c.h * 0.54;
+          ctx.fillStyle = c.roof;
+          roundedRectPath(-roofW * 0.5, -roofH * 0.5, roofW, roofH, c.h * 0.2);
+          ctx.fill();
+
+          if (c.stripe) {
+            ctx.fillStyle = c.trim;
+            roundedRectPath(-c.w * 0.38, -c.h * 0.08, c.w * 0.76, c.h * 0.16, c.h * 0.08);
+            ctx.fill();
+          }
+
+          ctx.fillStyle = "#20242f";
+          roundedRectPath(-c.w * 0.38, -c.h * 0.6, c.w * 0.2, c.h * 0.16, c.h * 0.06);
+          ctx.fill();
+          roundedRectPath(c.w * 0.18, -c.h * 0.6, c.w * 0.2, c.h * 0.16, c.h * 0.06);
+          ctx.fill();
+          roundedRectPath(-c.w * 0.38, c.h * 0.44, c.w * 0.2, c.h * 0.16, c.h * 0.06);
+          ctx.fill();
+          roundedRectPath(c.w * 0.18, c.h * 0.44, c.w * 0.2, c.h * 0.16, c.h * 0.06);
+          ctx.fill();
+
+          ctx.fillStyle = "#ffedaa";
+          roundedRectPath(c.w * 0.44, -c.h * 0.32, c.w * 0.08 * pulse, c.h * 0.2, c.h * 0.05);
+          ctx.fill();
+          roundedRectPath(c.w * 0.44, c.h * 0.12, c.w * 0.08 * pulse, c.h * 0.2, c.h * 0.05);
+          ctx.fill();
+
+          if (c.blink && Math.sin(state.elapsed * 10 + c.phase) > 0) {
+            ctx.fillStyle = "#ffd44d";
+            roundedRectPath(-c.w * 0.52, -c.h * 0.12, c.w * 0.06, c.h * 0.24, c.h * 0.04);
+            ctx.fill();
+          }
+
+          ctx.restore();
+        }
+      }
+
+      function drawCrates() {
+        for (const c of crates) {
+          ctx.fillStyle = "#c8843d";
+          roundedRectPath(c.x - c.r, c.y - c.r, c.r * 2, c.r * 2, c.r * 0.35);
+          ctx.fill();
+          ctx.fillStyle = "rgba(0,0,0,0.18)";
+          roundedRectPath(c.x - c.r * 0.45, c.y - c.r * 0.35, c.r * 0.9, c.r * 0.7, c.r * 0.16);
+          ctx.fill();
+          ctx.strokeStyle = "rgba(255,255,255,0.3)";
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(c.x - c.r * 0.55, c.y);
+          ctx.lineTo(c.x + c.r * 0.55, c.y);
+          ctx.stroke();
+        }
+      }
+
+      function drawPickupIcon(p) {
+        const t = state.elapsed * 2.8 + p.phase;
+        ctx.save();
+        ctx.translate(p.x, p.y + Math.sin(t) * 2.5);
+        ctx.rotate(p.rot + state.elapsed * 0.9);
+
+        if (p.type === "speed") {
+          ctx.fillStyle = "#ffd44d";
+          ctx.beginPath();
+          ctx.moveTo(-4, -7);
+          ctx.lineTo(1, -7);
+          ctx.lineTo(-2, 0);
+          ctx.lineTo(4, 0);
+          ctx.lineTo(-3, 8);
+          ctx.lineTo(-1, 2);
+          ctx.lineTo(-6, 2);
+          ctx.closePath();
+          ctx.fill();
+        } else if (p.type === "magnet") {
+          ctx.strokeStyle = "#67ddff";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(0, 0, 6, Math.PI * 0.15, Math.PI * 0.85, true);
+          ctx.stroke();
+          ctx.fillStyle = "#67ddff";
+          ctx.fillRect(-7, -2, 3, 6);
+          ctx.fillRect(4, -2, 3, 6);
+        } else if (p.type === "shield") {
+          ctx.strokeStyle = "#9ef3ff";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(0, -8);
+          ctx.lineTo(7, -4);
+          ctx.lineTo(6, 5);
+          ctx.lineTo(0, 9);
+          ctx.lineTo(-6, 5);
+          ctx.lineTo(-7, -4);
+          ctx.closePath();
+          ctx.stroke();
+        } else {
+          ctx.strokeStyle = "#a0ff8a";
+          ctx.lineWidth = 2.4;
+          ctx.beginPath();
+          ctx.arc(0, 0, 6, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(0, -9);
+          ctx.lineTo(0, 9);
+          ctx.moveTo(-9, 0);
+          ctx.lineTo(9, 0);
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      }
+
+      function drawPickups() {
+        for (const p of pickups) {
+          const pulse = 0.9 + Math.sin(state.elapsed * 6 + p.phase) * 0.08;
+          ctx.beginPath();
+          ctx.fillStyle = "rgba(0,0,0,0.22)";
+          ctx.ellipse(p.x, p.y + 10, p.r * 0.9, p.r * 0.4, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          const col = p.type === "speed"
+            ? "rgba(255,212,77,0.4)"
+            : p.type === "magnet"
+              ? "rgba(103,221,255,0.38)"
+              : p.type === "shield"
+                ? "rgba(158,243,255,0.36)"
+                : "rgba(160,255,138,0.4)";
+          ctx.beginPath();
+          ctx.fillStyle = col;
+          ctx.arc(p.x, p.y, p.r * pulse, 0, Math.PI * 2);
+          ctx.fill();
+
+          drawPickupIcon(p);
+        }
+      }
+
+      function drawControlPoints() {
+        const turretImg = art.turret && art.turret.complete && art.turret.naturalWidth > 0 ? art.turret : null;
+        for (const cp of controlPoints) {
+          const pulse = 0.92 + Math.sin(state.elapsed * 4 + cp.pulse) * 0.08;
+          const col = cp.owner === "player" ? "#67ddff" : "rgba(255,255,255,0.4)";
+
+          ctx.strokeStyle = col;
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.arc(cp.x, cp.y, cp.r * pulse, 0, Math.PI * 2);
+          ctx.stroke();
+
+          if (cp.capture > 0.01) {
+            ctx.strokeStyle = cp.owner === "player" ? "#9cff68" : "#ffd46d";
+            ctx.lineWidth = 8;
+            ctx.beginPath();
+            ctx.arc(cp.x, cp.y, cp.r + 10, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * cp.capture);
+            ctx.stroke();
+          }
+
+          if (turretImg) {
+            const size = cp.owner === "player" ? 120 : 104;
+            ctx.save();
+            ctx.translate(cp.x, cp.y - 14);
+            if (cp.owner === "player") {
+              ctx.shadowColor = "rgba(103,221,255,0.7)";
+              ctx.shadowBlur = 18;
+            }
+            ctx.drawImage(turretImg, -size * 0.5, -size * 0.5, size, size);
+            ctx.restore();
+          } else {
+            ctx.fillStyle = cp.owner === "player" ? "#50d2ff" : "#6d7890";
+            roundedRectPath(cp.x - 24, cp.y - 20, 48, 40, 10);
+            ctx.fill();
+          }
+        }
+      }
+
+      function drawSwarmBugs() {
+        for (const s of swarmBugs) {
+          const img = getAnimatedImage(art.enemyAnt, s.phase, 11);
+          const sz = s.r * 3.3;
+          if (img) {
+            ctx.save();
+            ctx.translate(s.x, s.y);
+            ctx.rotate(Math.atan2(s.ty - s.y, s.tx - s.x) * 0.2);
+            ctx.drawImage(img, -sz * 0.5, -sz * 0.5, sz, sz);
+            ctx.restore();
+          } else {
+            ctx.fillStyle = "#b08558";
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+
+      function drawAllies() {
+        for (const a of allyUnits) {
+          const img = a.kind === "ranged"
+            ? getAnimatedImage(art.allyRanged, a.phase, 9)
+            : getAnimatedImage(art.allyMelee, a.phase, 9);
+          const size = a.r * 3.1;
+
+          ctx.save();
+          ctx.translate(a.x, a.y);
+          const angle = Math.atan2(a.ty - a.y, a.tx - a.x);
+          ctx.rotate(clamp(angle * 0.12, -0.45, 0.45));
+          if (img) {
+            ctx.drawImage(img, -size * 0.5, -size * 0.5, size, size);
+          } else {
+            ctx.fillStyle = a.kind === "ranged" ? "#ffd46d" : "#ff9a66";
+            ctx.beginPath();
+            ctx.arc(0, 0, a.r, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+
+          ctx.strokeStyle = "rgba(160,255,138,0.78)";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(a.x, a.y, a.r + 8, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+
+      function drawSupportShots() {
+        for (const s of turretShots) {
+          ctx.fillStyle = s.color;
+          ctx.shadowColor = s.color;
+          ctx.shadowBlur = 14;
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+      }
+
+      function drawDino(unit) {
+
+        const pulse = 0.96 + Math.sin(state.elapsed * 6 + unit.mass) * 0.05;
+        const ringR = unit.holeR * pulse;
+
+        if (unit.isPlayer) {
+          if (activeEffects.magnet > 0) {
+            const mr = unit.holeR * (1.62 + Math.sin(state.elapsed * 8) * 0.08);
+            ctx.lineWidth = 5;
+            ctx.strokeStyle = "rgba(103,221,255,0.7)";
+            ctx.beginPath();
+            ctx.arc(unit.x, unit.y, mr, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+
+          if (activeEffects.speedBoost > 0) {
+            for (let i = 0; i < 3; i++) {
+              const sr = unit.holeR + 14 + i * 10 + Math.sin(state.elapsed * 14 + i) * 2.5;
+              ctx.lineWidth = 3;
+              ctx.strokeStyle = `rgba(255,212,77,${0.42 - i * 0.1})`;
+              ctx.beginPath();
+              ctx.arc(unit.x, unit.y, sr, state.elapsed * 7 + i, state.elapsed * 7 + i + Math.PI * 0.9);
+              ctx.stroke();
+            }
+          }
+
+          if (activeEffects.shield > 0) {
+            const rr = unit.holeR + 18 + Math.sin(state.elapsed * 9) * 2;
+            ctx.fillStyle = "rgba(158,243,255,0.13)";
+            ctx.beginPath();
+            ctx.arc(unit.x, unit.y, rr, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = "rgba(158,243,255,0.75)";
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(unit.x, unit.y, rr, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+
+        ctx.lineWidth = 7;
+        ctx.strokeStyle = unit.isPlayer ? "rgba(255,57,162,0.95)" : "rgba(92,225,255,0.95)";
+        ctx.fillStyle = "rgba(0,0,0,0.92)";
+        ctx.beginPath();
+        ctx.arc(unit.x, unit.y, ringR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        const avatar = getAvatarImage(unit);
+        if (avatar) {
+          const size = unit.bodyR * 2.45;
+          const tilt = clamp(unit.angle * 0.08, -0.35, 0.35);
+
+          ctx.save();
+          ctx.translate(unit.x, unit.y - unit.bodyR * 0.06);
+          ctx.rotate(tilt);
+
+          ctx.fillStyle = "rgba(0,0,0,0.24)";
+          ctx.beginPath();
+          ctx.ellipse(0, unit.bodyR * 0.8, size * 0.36, size * 0.15, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.drawImage(avatar, -size * 0.5, -size * 0.5, size, size);
+          ctx.restore();
+        } else {
+          ctx.save();
+          ctx.translate(unit.x, unit.y);
+          ctx.rotate(unit.angle);
+
+          const body = unit.bodyR;
+          ctx.fillStyle = unit.color;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, body, body * 0.64, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.moveTo(-body * 0.5, 0);
+          ctx.lineTo(-body * 1.35, -body * 0.3);
+          ctx.lineTo(-body * 1.45, body * 0.23);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.arc(body * 0.64, -body * 0.05, body * 0.46, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = "#0f1420";
+          ctx.beginPath();
+          ctx.arc(body * 0.9, -body * 0.16, Math.max(2, body * 0.08), 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.restore();
+        }
+
+        ctx.fillStyle = unit.isPlayer ? "#ffffff" : "#f0f0f0";
+        ctx.font = `700 ${unit.isPlayer ? 25 : 19}px Trebuchet MS`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        ctx.fillText(unit.name, unit.x, unit.y - unit.holeR - 20);
+        ctx.font = "700 16px Trebuchet MS";
+        ctx.fillText("Lv." + unit.level, unit.x, unit.y - unit.holeR - 2);
+
+        if (unit.invincible > 0) {
+          ctx.strokeStyle = "rgba(255,255,255,0.55)";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(unit.x, unit.y, unit.holeR + 10, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+
+      function drawPopups() {
+        for (const p of popups) {
+          const maxLife = p.maxLife || 0.9;
+          const alpha = clamp(p.life / maxLife, 0, 1);
+          const popScale = 1 + Math.sin((1 - alpha) * Math.PI) * 0.08;
+          const fontSize = Math.floor((p.size || 24) * popScale);
+
+          ctx.globalAlpha = alpha;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.font = `${p.weight || 700} ${fontSize}px Trebuchet MS`;
+
+          ctx.lineWidth = Math.max(2, fontSize * 0.12);
+          ctx.strokeStyle = "rgba(0,0,0,0.55)";
+          ctx.strokeText(p.text, p.x, p.y);
+
+          ctx.shadowColor = p.color;
+          ctx.shadowBlur = fontSize * 0.42;
+          ctx.fillStyle = p.color;
+          ctx.fillText(p.text, p.x, p.y);
+          ctx.shadowBlur = 0;
+        }
+        ctx.globalAlpha = 1;
+      }
+
+
+      function drawEventOverlay() {
+        if (eventBanner.flash > 0) {
+          const flash = clamp(eventBanner.flash, 0, 0.8);
+          ctx.save();
+          ctx.globalAlpha = flash * 0.72;
+          ctx.fillStyle = eventBanner.color;
+          ctx.fillRect(0, 0, viewW, viewH);
+          ctx.globalAlpha = flash * 0.24;
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, viewW, viewH);
+          ctx.restore();
+        }
+
+        if (worldEvent.ttl > 0 || worldEvent.impact > 0) {
+          const edge = Math.min(0.38, worldEvent.impact * 0.22 + (worldEvent.ttl > 0 ? 0.09 : 0));
+          if (edge > 0) {
+            ctx.save();
+            ctx.globalAlpha = edge;
+            ctx.fillStyle = worldEvent.color;
+            const band = Math.max(14, Math.min(viewW, viewH) * 0.025);
+            ctx.fillRect(0, 0, viewW, band);
+            ctx.fillRect(0, viewH - band, viewW, band);
+            ctx.fillRect(0, 0, band, viewH);
+            ctx.fillRect(viewW - band, 0, band, viewH);
+            ctx.restore();
+          }
+
+          if (worldEvent.impact > 0) {
+            const t = 1 - clamp(worldEvent.impact / 1.8, 0, 1);
+            const radius = Math.hypot(viewW, viewH) * (0.16 + t * 0.55);
+            ctx.save();
+            ctx.globalAlpha = (1 - t) * 0.55;
+            ctx.strokeStyle = worldEvent.color;
+            ctx.lineWidth = 14 - t * 9;
+            ctx.beginPath();
+            ctx.arc(viewW * 0.5, viewH * 0.5, radius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
+
+        if (eventBanner.ttl > 0) {
+          const w = Math.min(700, viewW * 0.93);
+          const h = 102;
+          const x = (viewW - w) * 0.5;
+          const jitter = Math.sin(state.elapsed * 78) * worldEvent.impact * 1.7;
+          const y = 20 + Math.sin(state.elapsed * 12) * 2 + jitter;
+          const pulse = 0.62 + Math.sin(state.elapsed * 19) * 0.38;
+
+          ctx.save();
+          const bg = ctx.createLinearGradient(x, y, x + w, y + h);
+          bg.addColorStop(0, "rgba(8,16,28,0.95)");
+          bg.addColorStop(1, "rgba(18,28,46,0.95)");
+          ctx.fillStyle = bg;
+          roundedRectPath(x, y, w, h, 18);
+          ctx.fill();
+
+          ctx.lineWidth = 6;
+          ctx.strokeStyle = eventBanner.color;
+          roundedRectPath(x, y, w, h, 18);
+          ctx.stroke();
+
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "rgba(255,255,255,0.72)";
+          roundedRectPath(x + 3, y + 3, w - 6, h - 6, 15);
+          ctx.stroke();
+
+          ctx.globalAlpha = 0.18 + pulse * 0.24;
+          ctx.fillStyle = eventBanner.color;
+          roundedRectPath(x + 8, y + 8, w - 16, h - 16, 13);
+          ctx.fill();
+
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = "#ffffff";
+          ctx.shadowColor = eventBanner.color;
+          ctx.shadowBlur = 24;
+          ctx.font = "900 44px Trebuchet MS";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(eventBanner.text, viewW * 0.5, y + h * 0.5 - 6);
+          ctx.shadowBlur = 0;
+
+          if (worldEvent.ttl > 0) {
+            ctx.font = "700 19px Trebuchet MS";
+            ctx.fillStyle = "rgba(255,255,255,0.9)";
+            ctx.fillText(`EVENT ${worldEvent.ttl.toFixed(1)}s`, viewW * 0.5, y + h - 21);
+          } else {
+            ctx.font = "700 19px Trebuchet MS";
+            ctx.fillStyle = "rgba(255,255,255,0.86)";
+            ctx.fillText("BUFF ACTIVATED", viewW * 0.5, y + h - 21);
+          }
+
+          ctx.restore();
+        }
+      }
+
+
+      function getRanking() {
+        const list = [
+          { name: player.name, score: Math.floor(player.mass * 10 + state.kills * 50), isPlayer: true }
+        ];
+        for (const b of bots) {
+          list.push({ name: b.name, score: Math.floor(b.mass * 10), isPlayer: false });
+        }
+        list.sort((a, b) => b.score - a.score);
+        return list;
+      }
+
+      function renderHud() {
+        const mm = Math.floor(state.timeLeft / 60);
+        const ss = Math.floor(state.timeLeft % 60).toString().padStart(2, "0");
+        const effectTags = [];
+        if (activeEffects.speedBoost > 0) effectTags.push(`Speed x1.78 ${activeEffects.speedBoost.toFixed(1)}s`);
+        if (activeEffects.magnet > 0) effectTags.push(`Magnet x1.90 ${activeEffects.magnet.toFixed(1)}s`);
+        if (activeEffects.shield > 0) effectTags.push(`Shield Ready ${activeEffects.shield.toFixed(1)}s`);
+
+        const eventText = worldEvent.ttl > 0 ? `${worldEvent.label} ${worldEvent.ttl.toFixed(1)}s` : "None";
+        const randomText = `Mods Crowd x${randomProfile.crowdScale.toFixed(2)}  Traffic x${randomProfile.trafficScale.toFixed(2)}  Aggro x${randomProfile.botAggro.toFixed(2)}`;
+        const outpostCount = controlPoints.reduce((n, cp) => n + (cp.owner === "player" ? 1 : 0), 0);
+        const supportText = `Outpost ${outpostCount}/${controlPoints.length}  Allies ${allyUnits.length}  Swarm ${swarmBugs.length}`;
+
+        statsEl.innerHTML =
+          `<strong style="color:#5ce1ff">Dino Hole Rampage</strong><br>` +
+          `Lv: <strong>${player.level}</strong>  Mass: <strong>${Math.floor(player.mass)}</strong><br>` +
+          `Score: <strong>${Math.floor(state.score)}</strong>  KO: <strong>${state.kills}</strong><br>` +
+          `Difficulty: <strong style="color:#ffd95f">${getDifficultyPreset().label}</strong>  Time: <strong style="color:#9cff68">${mm}:${ss}</strong><br>` +
+          `Event: <strong style="color:#67ddff">${eventText}</strong><br>` +
+          `${randomText}<br>` +
+          `${supportText}<br>` +
+          `Effects: ${effectTags.length ? effectTags.join(" | ") : "None"}`;
+
+        const ranking = getRanking().slice(0, 5);
+        let txt = "";
+        for (let i = 0; i < ranking.length; i++) {
+          const row = ranking[i];
+          const marker = row.isPlayer ? ">> " : "   ";
+          txt += `${i + 1}. ${marker}${row.name}  ${row.score}\n`;
+        }
+        boardEl.textContent = txt.trim();
+      }
+
+      function render() {
+        ctx.clearRect(0, 0, viewW, viewH);
+        ctx.save();
+        ctx.translate(-camera.x, -camera.y);
+        drawRoads();
+        drawControlPoints();
+        drawCars();
+        drawCrates();
+        drawPickups();
+        drawCivilians();
+        drawSwarmBugs();
+        drawAllies();
+        drawSupportShots();
+        for (const b of bots) drawDino(b);
+        drawDino(player);
+        drawPopups();
+        ctx.restore();
+        drawEventOverlay();
+        renderHud();
+      }
+
+      function endGame(reason) {
+        if (state.gameOver) return;
+        state.gameOver = true;
+        state.reason = reason;
+        running = false;
+
+        const ranking = getRanking();
+        const rank = ranking.findIndex((r) => r.isPlayer) + 1;
+        overlayTitle.textContent = (reason.includes("时间到") || reason.includes("Time up")) ? "对局结束" : "你被击败了";
+        overlayText.textContent =
+          `${reason}\n最终排名: ${rank}/${ranking.length}  | 得分: ${Math.floor(state.score)}  | 等级: ${player.level}`;
+        overlay.style.display = "flex";
+      }
+
+      function loop(ts) {
+        if (!lastTs) lastTs = ts;
+        const dt = Math.min(0.033, (ts - lastTs) / 1000);
+        lastTs = ts;
+        update(dt);
+        render();
+        requestAnimationFrame(loop);
+      }
+
+      function setPointerFromEvent(e) {
+        const rect = canvas.getBoundingClientRect();
+        pointer = {
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top
+        };
+      }
+
+      function onPointerDown(e) {
+        pointerActive = true;
+        setPointerFromEvent(e);
+      }
+
+      function onPointerMove(e) {
+        if (!pointerActive && e.pointerType !== "mouse") return;
+        setPointerFromEvent(e);
+      }
+
+      function onPointerUp() {
+        pointerActive = false;
+      }
+
+      function resize() {
+        dpr = Math.min(2, window.devicePixelRatio || 1);
+        viewW = window.innerWidth;
+        viewH = window.innerHeight;
+        canvas.width = Math.floor(viewW * dpr);
+        canvas.height = Math.floor(viewH * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      canvas.addEventListener("pointerdown", onPointerDown);
+      canvas.addEventListener("pointermove", onPointerMove);
+      canvas.addEventListener("pointerup", onPointerUp);
+      canvas.addEventListener("pointercancel", onPointerUp);
+      window.addEventListener("resize", resize);
+
+      restartBtn.addEventListener("click", () => {
+        resetMatch();
+      });
+
+      for (const btn of difficultyBtnEls) {
+        const key = btn.dataset.difficulty || "medium";
+        btn.addEventListener("mouseenter", () => updateDifficultyInfo(key));
+        btn.addEventListener("focus", () => updateDifficultyInfo(key));
+        btn.addEventListener("click", () => startGameWithDifficulty(key));
+      }
+
+      buildMap();
+      loadArtAssets();
+      resize();
+      showDifficultySelect();
+      requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>
+
+
+
+
+
+

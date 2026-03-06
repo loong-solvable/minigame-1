@@ -27,7 +27,7 @@ const DEFAULT_CONFIG = {
   pickupMinCount: 4,
   minSpawnDistance: 240,
   startMass: 24,
-  playerRespawnDelayMs: 2000,
+  playerRespawnDelayMs: 3000,
   playerRespawnInvincibleMs: 3000,
   botRespawnInvincibleMs: 1200,
   foodReplenishIntervalMs: 1000,
@@ -222,6 +222,15 @@ function createRoom(app, code) {
       crates: []
     },
     pickups: [],
+    controlPoints: [],
+    turretShots: [],
+    popups: [],
+    eventBanner: {
+      text: "",
+      color: "#5ce1ff",
+      ttlMs: 0,
+      flash: 0
+    },
     ranking: []
   };
 }
@@ -272,6 +281,17 @@ function buildRoomState(room) {
 
 function getCompetitors(room) {
   return [...room.players.values(), ...room.bots];
+}
+
+function getCompetitorById(room, id) {
+  if (!id) return null;
+  if (room.players.has(id)) {
+    return room.players.get(id);
+  }
+  for (const bot of room.bots) {
+    if (bot.id === id) return bot;
+  }
+  return null;
 }
 
 function chooseSafeSpawn(room, unit, ignoreId = "") {
@@ -368,6 +388,60 @@ function createCrate(room) {
   };
 }
 
+function createControlPoints(room) {
+  const slots = [
+    { x: ROADS_X[1], y: ROADS_Y[1] },
+    { x: ROADS_X[3], y: ROADS_Y[3] },
+    { x: ROADS_X[2], y: ROADS_Y[5] }
+  ];
+  room.controlPoints = slots.map((slot) => ({
+    id: `cp_${room.nextEntityId++}`,
+    x: slot.x,
+    y: slot.y,
+    r: 58,
+    pulse: rand(room.rng, 0, Math.PI * 2),
+    ownerId: "",
+    capture: 0,
+    fireCdMs: rand(room.rng, 1000, 1800)
+  }));
+}
+
+function triggerBanner(room, text, color = "#5ce1ff", ttlMs = 3200, flash = 0.34) {
+  room.eventBanner.text = text;
+  room.eventBanner.color = color;
+  room.eventBanner.ttlMs = Math.max(room.eventBanner.ttlMs, ttlMs);
+  room.eventBanner.flash = Math.max(room.eventBanner.flash, flash);
+}
+
+function addPopup(room, x, y, text, color = "#ffffff", lifeMs = 900, size = 24, weight = 700) {
+  room.popups.push({
+    id: `popup_${room.nextEntityId++}`,
+    x,
+    y,
+    text,
+    color,
+    lifeMs,
+    maxLifeMs: lifeMs,
+    size,
+    weight
+  });
+}
+
+function updateRoomEffects(room, dtMs) {
+  room.eventBanner.ttlMs = Math.max(0, room.eventBanner.ttlMs - dtMs);
+  room.eventBanner.flash = Math.max(0, room.eventBanner.flash - (dtMs / 1000) * 0.38);
+
+  for (let i = room.popups.length - 1; i >= 0; i--) {
+    const popup = room.popups[i];
+    const rise = 22 + (popup.size || 24) * 0.85;
+    popup.y -= rise * (dtMs / 1000);
+    popup.lifeMs -= dtMs;
+    if (popup.lifeMs <= 0) {
+      room.popups.splice(i, 1);
+    }
+  }
+}
+
 function spawnPickup(room, forceType = "") {
   const p = randomRoadPos(room.rng);
   const roll = room.rng();
@@ -407,6 +481,14 @@ function initializeMatch(room) {
   room.rng = mulberry32((room.seed ^ nowMs()) >>> 0);
   room.nextEntityId = 1;
   room.ranking = [];
+  room.turretShots = [];
+  room.popups = [];
+  room.eventBanner = {
+    text: "",
+    color: "#5ce1ff",
+    ttlMs: 0,
+    flash: 0
+  };
 
   for (const player of room.players.values()) {
     player.connected = true;
@@ -428,11 +510,13 @@ function initializeMatch(room) {
   }
 
   fillFoods(room);
+  createControlPoints(room);
   room.pickups.length = 0;
   for (let i = 0; i < room.app.config.initialPickupCount; i++) {
     spawnPickup(room, PICKUP_TYPES[i % PICKUP_TYPES.length]);
   }
 
+  triggerBanner(room, "MATCH START", "#5ce1ff", 2800, 0.45);
   broadcastRoom(room, buildRoomState(room));
   broadcastSnapshots(room);
 }
@@ -494,13 +578,19 @@ function absorbFoods(room, unit, now) {
   }
 }
 
-function applyPickup(unit, type, now) {
+function applyPickup(room, unit, type, now) {
   if (type === "speed") {
     unit.speedUntil = Math.max(unit.speedUntil, now + 12000);
+    addPopup(room, unit.x, unit.y, "Speed x1.78", "#ffd44d", 2200, 30, 900);
+    triggerBanner(room, "SPEED BOOST", "#ffd44d", 3000, 0.32);
   } else if (type === "magnet") {
     unit.magnetUntil = Math.max(unit.magnetUntil, now + 14000);
+    addPopup(room, unit.x, unit.y, "Magnet x1.90", "#67ddff", 2200, 30, 900);
+    triggerBanner(room, "MEGA MAGNET", "#67ddff", 3000, 0.32);
   } else if (type === "shield") {
     unit.shieldUntil = Math.max(unit.shieldUntil, now + 24000);
+    addPopup(room, unit.x, unit.y, "Shield Ready", "#9ef3ff", 2300, 32, 900);
+    triggerBanner(room, "SHIELD ON", "#9ef3ff", 3200, 0.35);
   }
   if (!unit.isBot) {
     unit.score += 26;
@@ -513,7 +603,208 @@ function collectPickups(room, unit, now) {
     const rr = (unit.holeR + pickup.r) * (unit.holeR + pickup.r);
     if (dist2(unit.x, unit.y, pickup.x, pickup.y) <= rr) {
       room.pickups.splice(i, 1);
-      applyPickup(unit, pickup.type, now);
+      applyPickup(room, unit, pickup.type, now);
+    }
+  }
+}
+
+function findNearestEnemy(room, x, y, ownerId, maxDistance = 820) {
+  let best = null;
+  let bestD2 = maxDistance * maxDistance;
+  for (const unit of getCompetitors(room)) {
+    if (!unit.alive || unit.id === ownerId) {
+      continue;
+    }
+    const d2 = dist2(x, y, unit.x, unit.y);
+    if (d2 < bestD2) {
+      best = unit;
+      bestD2 = d2;
+    }
+  }
+  return best;
+}
+
+function spawnSupportShot(room, ownerId, x, y, tx, ty, color = "#74e6ff", damage = 8.5, radius = 10) {
+  const dx = tx - x;
+  const dy = ty - y;
+  const len = Math.hypot(dx, dy) || 1;
+  room.turretShots.push({
+    id: `shot_${room.nextEntityId++}`,
+    ownerId,
+    x,
+    y,
+    vx: (dx / len) * 860,
+    vy: (dy / len) * 860,
+    ttlMs: 1100,
+    damage,
+    r: radius,
+    color
+  });
+}
+
+function markHumanDefeat(room, loser, now, scorePenalty = 25) {
+  loser.deaths += 1;
+  loser.alive = false;
+  loser.respawnAt = now + room.app.config.playerRespawnDelayMs;
+  loser.score = Math.max(0, loser.score - scorePenalty);
+  loser.mass = room.app.config.startMass;
+  syncSize(loser);
+  loser.speedUntil = 0;
+  loser.magnetUntil = 0;
+  loser.shieldUntil = 0;
+  loser.invincibleUntil = 0;
+}
+
+function applyTurretDamage(room, ownerId, target, damage, now, x, y, color) {
+  if (!target.alive || target.invincibleUntil > now) {
+    return;
+  }
+
+  if (target.shieldUntil > now) {
+    target.shieldUntil = 0;
+    target.invincibleUntil = now + 1200;
+    addPopup(room, x, y, "BLOCK", "#9ef3ff", 850, 20, 800);
+    return;
+  }
+
+  const previousMass = target.mass;
+  target.mass = Math.max(14, target.mass - damage);
+  syncSize(target);
+  if (!target.isBot) {
+    target.score = Math.max(0, target.score - 2);
+  }
+
+  addPopup(room, x, y, `-${Math.max(1, Math.floor(damage))}`, color || "#74e6ff", 850, 20, 700);
+
+  if (target.mass > 14.2) {
+    return;
+  }
+
+  const owner = getCompetitorById(room, ownerId);
+  if (owner && owner.alive) {
+    owner.kills += 1;
+    owner.mass += Math.max(5, Math.floor(previousMass * 0.12));
+    syncSize(owner);
+    if (!owner.isBot) {
+      owner.score += 24;
+    }
+  }
+
+  addPopup(room, target.x, target.y, "KO!", "#9cff68", 1100, 25, 900);
+
+  if (target.isBot) {
+    respawnBot(room, target);
+    return;
+  }
+
+  markHumanDefeat(room, target, now, 20);
+}
+
+function updateTurretShots(room, dt, now) {
+  for (let i = room.turretShots.length - 1; i >= 0; i--) {
+    const shot = room.turretShots[i];
+    shot.x += shot.vx * dt;
+    shot.y += shot.vy * dt;
+    shot.ttlMs -= dt * 1000;
+
+    let hit = false;
+    for (const unit of getCompetitors(room)) {
+      if (!unit.alive || unit.id === shot.ownerId) {
+        continue;
+      }
+      const rr = (unit.bodyR + shot.r) * (unit.bodyR + shot.r);
+      if (dist2(shot.x, shot.y, unit.x, unit.y) <= rr) {
+        applyTurretDamage(room, shot.ownerId, unit, shot.damage, now, shot.x, shot.y, shot.color);
+        hit = true;
+        break;
+      }
+    }
+
+    if (hit || shot.ttlMs <= 0 || shot.x < -40 || shot.y < -40 || shot.x > WORLD.w + 40 || shot.y > WORLD.h + 40) {
+      room.turretShots.splice(i, 1);
+    }
+  }
+}
+
+function updateControlPoints(room, dt, now) {
+  const dtMs = dt * 1000;
+  for (const controlPoint of room.controlPoints) {
+    controlPoint.pulse += dt * 2.2;
+
+    const pressure = new Map();
+    for (const unit of getCompetitors(room)) {
+      if (!unit.alive) {
+        continue;
+      }
+      const rr = controlPoint.r + unit.bodyR;
+      if (dist2(unit.x, unit.y, controlPoint.x, controlPoint.y) <= rr * rr) {
+        pressure.set(unit.id, (pressure.get(unit.id) || 0) + 1);
+      }
+    }
+
+    let topId = "";
+    let topCount = 0;
+    let secondCount = 0;
+    for (const [unitId, count] of pressure.entries()) {
+      if (count > topCount) {
+        secondCount = topCount;
+        topCount = count;
+        topId = unitId;
+      } else if (count > secondCount) {
+        secondCount = count;
+      }
+    }
+
+    const contested = topCount > 0 && topCount === secondCount;
+    const prevOwnerId = controlPoint.ownerId;
+    if (!topId || contested) {
+      controlPoint.capture = clamp(controlPoint.capture - dt * (controlPoint.ownerId ? 0.07 : 0.04), 0, 1);
+      if (controlPoint.capture <= 0.02) {
+        controlPoint.ownerId = "";
+      }
+    } else if (controlPoint.ownerId === topId) {
+      controlPoint.capture = clamp(controlPoint.capture + dt * 0.22, 0, 1);
+    } else if (!controlPoint.ownerId) {
+      controlPoint.capture = clamp(controlPoint.capture + dt * 0.16, 0, 1);
+      if (controlPoint.capture >= 0.98) {
+        controlPoint.ownerId = topId;
+        controlPoint.capture = 1;
+      }
+    } else {
+      controlPoint.capture = clamp(controlPoint.capture - dt * 0.22, 0, 1);
+      if (controlPoint.capture <= 0.02) {
+        controlPoint.ownerId = topId;
+        controlPoint.capture = 0.12;
+      }
+    }
+
+    if (prevOwnerId !== controlPoint.ownerId && controlPoint.ownerId) {
+      const owner = getCompetitorById(room, controlPoint.ownerId);
+      addPopup(room, controlPoint.x, controlPoint.y - controlPoint.r - 24, "OUTPOST ONLINE", "#67ddff", 2200, 34, 900);
+      triggerBanner(room, "OUTPOST CAPTURED", "#67ddff", 3600, 0.34);
+      if (owner && !owner.isBot) {
+        owner.score += 18;
+      }
+    }
+
+    if (controlPoint.ownerId) {
+      const owner = getCompetitorById(room, controlPoint.ownerId);
+      if (!owner) {
+        controlPoint.ownerId = "";
+        controlPoint.capture = 0;
+        continue;
+      }
+      if (owner && owner.alive && !owner.isBot) {
+        owner.score += dt * 4.2;
+      }
+      controlPoint.fireCdMs -= dtMs;
+      if (controlPoint.fireCdMs <= 0) {
+        controlPoint.fireCdMs = rand(room.rng, 1000, 1800);
+        const target = findNearestEnemy(room, controlPoint.x, controlPoint.y, controlPoint.ownerId, 820);
+        if (target) {
+          spawnSupportShot(room, controlPoint.ownerId, controlPoint.x, controlPoint.y, target.x, target.y, "#74e6ff", 8.5, 10);
+        }
+      }
     }
   }
 }
@@ -591,6 +882,7 @@ function respawnBot(room, bot) {
 function killHuman(room, winner, loser, now) {
   if (loser.shieldUntil > now) {
     resolveShieldBlock(loser, winner);
+    addPopup(room, loser.x, loser.y - 14, "SHIELD BLOCK", "#9ef3ff", 1800, 28, 900);
     return;
   }
 
@@ -600,17 +892,8 @@ function killHuman(room, winner, loser, now) {
   if (!winner.isBot) {
     winner.score += 42;
   }
-
-  loser.deaths += 1;
-  loser.alive = false;
-  loser.respawnAt = now + room.app.config.playerRespawnDelayMs;
-  loser.score = Math.max(0, loser.score - 25);
-  loser.mass = room.app.config.startMass;
-  syncSize(loser);
-  loser.speedUntil = 0;
-  loser.magnetUntil = 0;
-  loser.shieldUntil = 0;
-  loser.invincibleUntil = 0;
+  addPopup(room, loser.x, loser.y, "KO!", "#9cff68", 1000, 25, 900);
+  markHumanDefeat(room, loser, now, 25);
 }
 
 function handleBattles(room, now) {
@@ -711,10 +994,12 @@ function stepRoom(room) {
   }
 
   const dt = room.app.config.tickMs / 1000;
+  const dtMs = room.app.config.tickMs;
   const now = nowMs();
   room.tickCount += 1;
-  room.elapsedMs += room.app.config.tickMs;
-  room.timeLeftMs -= room.app.config.tickMs;
+  room.elapsedMs += dtMs;
+  room.timeLeftMs -= dtMs;
+  updateRoomEffects(room, dtMs);
 
   if (room.timeLeftMs <= 0) {
     room.timeLeftMs = 0;
@@ -733,7 +1018,7 @@ function stepRoom(room) {
   }
 
   for (const bot of room.bots) {
-    bot.aiThinkMs -= room.app.config.tickMs;
+    bot.aiThinkMs -= dtMs;
     if (bot.aiThinkMs <= 0 || dist2(bot.x, bot.y, bot.tx, bot.ty) < 40 * 40) {
       chooseBotTarget(room, bot);
       bot.aiThinkMs = rand(room.rng, 220, 560);
@@ -742,6 +1027,8 @@ function stepRoom(room) {
     absorbFoods(room, bot, now);
   }
 
+  updateControlPoints(room, dt, now);
+  updateTurretShots(room, dt, now);
   handleBattles(room, now);
   updateRespawns(room);
   refillFoods(room);
@@ -826,7 +1113,40 @@ function broadcastSnapshots(room) {
       r: round1(pickup.r),
       phase: round2(pickup.phase),
       rot: round2(pickup.rot)
-    }))
+    })),
+    controlPoints: room.controlPoints.map((controlPoint) => ({
+      id: controlPoint.id,
+      x: round1(controlPoint.x),
+      y: round1(controlPoint.y),
+      r: round1(controlPoint.r),
+      pulse: round2(controlPoint.pulse),
+      ownerId: controlPoint.ownerId,
+      capture: round2(controlPoint.capture)
+    })),
+    turretShots: room.turretShots.map((shot) => ({
+      id: shot.id,
+      x: round1(shot.x),
+      y: round1(shot.y),
+      r: round1(shot.r),
+      color: shot.color
+    })),
+    popups: room.popups.map((popup) => ({
+      id: popup.id,
+      x: round1(popup.x),
+      y: round1(popup.y),
+      text: popup.text,
+      color: popup.color,
+      lifeMs: Math.max(0, Math.floor(popup.lifeMs)),
+      maxLifeMs: popup.maxLifeMs,
+      size: popup.size,
+      weight: popup.weight
+    })),
+    eventBanner: {
+      text: room.eventBanner.text,
+      color: room.eventBanner.color,
+      ttlMs: Math.max(0, Math.floor(room.eventBanner.ttlMs)),
+      flash: round2(room.eventBanner.flash)
+    }
   };
 
   for (const player of room.players.values()) {

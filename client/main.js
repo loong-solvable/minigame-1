@@ -24,7 +24,11 @@ const refs = {
   resultSummary: document.getElementById("resultSummary"),
   resultBoard: document.getElementById("resultBoard"),
   rematchBtn: document.getElementById("rematchBtn"),
-  leaveAfterMatchBtn: document.getElementById("leaveAfterMatchBtn")
+  leaveAfterMatchBtn: document.getElementById("leaveAfterMatchBtn"),
+  loadingOverlay: document.getElementById("loadingOverlay"),
+  loadingStatus: document.getElementById("loadingStatus"),
+  loadingProgressFill: document.getElementById("loadingProgressFill"),
+  loadingProgressText: document.getElementById("loadingProgressText")
 };
 
 const canvas = document.getElementById("game");
@@ -41,6 +45,15 @@ const state = {
   finalRanking: [],
   foods: { civilians: [], cars: [], crates: [] },
   pickups: [],
+  controlPoints: [],
+  turretShots: [],
+  popups: [],
+  eventBanner: { text: "", color: "#5ce1ff", ttlMs: 0, flash: 0 },
+  assetsLoaded: false,
+  assetLoadProgress: 0,
+  hasSnapshot: false,
+  loadingProgress: 0,
+  matchDurationMs: 0,
   timeLeftMs: 0,
   timeLeftSyncAt: performance.now(),
   elapsed: 0,
@@ -126,11 +139,21 @@ function resetClientState() {
   state.finalRanking = [];
   state.foods = { civilians: [], cars: [], crates: [] };
   state.pickups = [];
+  state.controlPoints = [];
+  state.turretShots = [];
+  state.popups = [];
+  state.eventBanner = { text: "", color: "#5ce1ff", ttlMs: 0, flash: 0 };
+  state.hasSnapshot = false;
+  state.loadingProgress = 0;
+  state.matchDurationMs = 0;
+  state.timeLeftMs = 0;
+  state.timeLeftSyncAt = performance.now();
   state.pointer = null;
   state.pointerActive = false;
   state.visualPlayers.clear();
   state.visualBots.clear();
   refs.resultOverlay.classList.add("hidden");
+  refs.loadingOverlay.classList.add("hidden");
   updateOverlays();
 }
 
@@ -167,6 +190,9 @@ function handleServerMessage(message) {
     state.roomCode = message.roomCode;
     state.hostId = message.hostId;
     state.phase = "lobby";
+    state.hasSnapshot = false;
+    state.loadingProgress = 0;
+    state.matchDurationMs = 0;
     state.finalRanking = [];
     setMenuError("");
     updateOverlays();
@@ -174,10 +200,15 @@ function handleServerMessage(message) {
   }
 
   if (message.type === "room_state") {
+    const prevPhase = state.phase;
     state.roomCode = message.roomCode || state.roomCode;
     state.hostId = message.hostId || "";
     state.roomPlayers = message.players || [];
     state.phase = message.phase || state.phase;
+    if (prevPhase !== "running" && state.phase === "running") {
+      state.hasSnapshot = false;
+      state.loadingProgress = Math.min(state.loadingProgress, 0.08);
+    }
     if (state.phase === "finished") {
       state.finalRanking = message.ranking || [];
       showResults();
@@ -213,12 +244,28 @@ function handleServerMessage(message) {
 }
 
 function applySnapshot(snapshot) {
+  const previousTimeLeftMs = state.timeLeftMs;
   state.phase = "running";
   state.roomCode = snapshot.roomCode;
   state.ranking = snapshot.ranking || [];
   state.foods = snapshot.foods || { civilians: [], cars: [], crates: [] };
   state.pickups = snapshot.pickups || [];
+  state.controlPoints = (snapshot.controlPoints || []).map((controlPoint) => ({ ...controlPoint }));
+  state.turretShots = (snapshot.turretShots || []).map((shot) => ({ ...shot }));
+  state.popups = (snapshot.popups || []).map((popup) => ({ ...popup }));
+  state.eventBanner = {
+    text: snapshot.eventBanner?.text || "",
+    color: snapshot.eventBanner?.color || "#5ce1ff",
+    ttlMs: Math.max(0, snapshot.eventBanner?.ttlMs || 0),
+    flash: Math.max(0, snapshot.eventBanner?.flash || 0)
+  };
+  state.hasSnapshot = true;
   state.timeLeftMs = snapshot.timeLeftMs || 0;
+  if (state.matchDurationMs <= 0 || state.timeLeftMs > previousTimeLeftMs + 2000) {
+    state.matchDurationMs = state.timeLeftMs;
+  } else if (state.timeLeftMs > state.matchDurationMs) {
+    state.matchDurationMs = state.timeLeftMs;
+  }
   state.timeLeftSyncAt = performance.now();
   refs.resultOverlay.classList.add("hidden");
   syncVisualMap(state.visualPlayers, snapshot.players || []);
@@ -278,6 +325,7 @@ function syncVisualMap(store, incoming) {
 
 function stepVisuals(dt) {
   const alpha = 1 - Math.exp(-dt * 12);
+  const dtMs = dt * 1000;
   for (const store of [state.visualPlayers, state.visualBots]) {
     for (const unit of store.values()) {
       unit.displayX = lerp(unit.displayX, unit.targetX, alpha);
@@ -286,6 +334,34 @@ function stepVisuals(dt) {
       unit.displayMass = lerp(unit.displayMass, unit.targetMass, alpha);
       unit.displayBodyR = lerp(unit.displayBodyR, unit.targetBodyR, alpha);
       unit.displayHoleR = lerp(unit.displayHoleR, unit.targetHoleR, alpha);
+      if (unit.invincibleMs > 0) {
+        unit.invincibleMs = Math.max(0, unit.invincibleMs - dtMs);
+      }
+      if (!unit.alive && unit.respawnMs > 0) {
+        unit.respawnMs = Math.max(0, unit.respawnMs - dtMs);
+      }
+      if (unit.effects) {
+        if (unit.effects.speedMs > 0) unit.effects.speedMs = Math.max(0, unit.effects.speedMs - dtMs);
+        if (unit.effects.magnetMs > 0) unit.effects.magnetMs = Math.max(0, unit.effects.magnetMs - dtMs);
+        if (unit.effects.shieldMs > 0) unit.effects.shieldMs = Math.max(0, unit.effects.shieldMs - dtMs);
+      }
+    }
+  }
+
+  if (state.eventBanner.ttlMs > 0) {
+    state.eventBanner.ttlMs = Math.max(0, state.eventBanner.ttlMs - dtMs);
+  }
+  if (state.eventBanner.flash > 0) {
+    state.eventBanner.flash = Math.max(0, state.eventBanner.flash - dt * 0.38);
+  }
+
+  for (let i = state.popups.length - 1; i >= 0; i--) {
+    const popup = state.popups[i];
+    const rise = 22 + (popup.size || 24) * 0.85;
+    popup.y -= rise * dt;
+    popup.lifeMs -= dtMs;
+    if (popup.lifeMs <= 0) {
+      state.popups.splice(i, 1);
     }
   }
 }
@@ -325,6 +401,39 @@ function updateOverlays() {
   refs.startMatchBtn.disabled = !isHost;
   refs.startMatchBtn.textContent = state.phase === "finished" ? "再开一局" : "开始对局";
   refs.rematchBtn.disabled = !isHost;
+}
+
+function updateLoadingOverlay(dt = 0) {
+  if (!refs.loadingOverlay || !refs.loadingProgressFill || !refs.loadingProgressText || !refs.loadingStatus) return;
+
+  if (state.phase !== "running") {
+    state.loadingProgress = 0;
+    refs.loadingOverlay.classList.add("hidden");
+    return;
+  }
+
+  const waitingForAssets = !state.assetsLoaded;
+  const waitingForSnapshot = !state.hasSnapshot;
+  const waiting = waitingForAssets || waitingForSnapshot;
+  const targetProgress = waiting
+    ? clamp(0.08 + state.assetLoadProgress * 0.68 + (waitingForSnapshot ? 0.12 : 0.24), 0.08, 0.95)
+    : 1;
+  const alpha = dt > 0 ? 1 - Math.exp(-dt * 8) : 1;
+  state.loadingProgress = lerp(state.loadingProgress, targetProgress, alpha);
+
+  if (!waiting && state.loadingProgress >= 0.995) {
+    refs.loadingOverlay.classList.add("hidden");
+    return;
+  }
+
+  refs.loadingOverlay.classList.remove("hidden");
+  refs.loadingProgressFill.style.width = `${Math.round(clamp(state.loadingProgress, 0, 1) * 100)}%`;
+  refs.loadingProgressText.textContent = `${Math.round(clamp(state.loadingProgress, 0, 1) * 100)}%`;
+  refs.loadingStatus.textContent = waitingForAssets
+    ? "正在准备资源..."
+    : waitingForSnapshot
+      ? "正在同步战场..."
+      : "即将进入对局...";
 }
 
 function showResults() {
@@ -394,12 +503,59 @@ function copyRoomCode() {
   }
 }
 
+function copyByExecCommand(text) {
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "readonly");
+  textarea.style.position = "fixed";
+  textarea.style.top = "-9999px";
+  textarea.style.left = "-9999px";
+  document.body.append(textarea);
+  textarea.focus();
+  textarea.select();
+  let ok = false;
+  try {
+    ok = document.execCommand("copy");
+  } catch {
+    ok = false;
+  }
+  textarea.remove();
+  return ok;
+}
+
+async function copyRoomCodeSafe() {
+  if (!state.roomCode) return;
+
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(state.roomCode);
+      setMenuError("房间码已复制。");
+      return;
+    } catch {
+      // Fall through to the compatibility path.
+    }
+  }
+
+  if (copyByExecCommand(state.roomCode)) {
+    setMenuError("房间码已复制。");
+    return;
+  }
+
+  try {
+    window.prompt("复制失败，请手动复制房间码：", state.roomCode);
+  } catch {
+    // Ignore prompt errors.
+  }
+  setMenuError(`房间码: ${state.roomCode}`);
+}
+
 function loop(ts) {
   if (!lastTs) lastTs = ts;
   const dt = Math.min(0.033, (ts - lastTs) / 1000);
   lastTs = ts;
   state.elapsed += dt;
   stepVisuals(dt);
+  updateLoadingOverlay(dt);
   renderer.frame(dt);
   requestAnimationFrame(loop);
 }
@@ -410,7 +566,7 @@ refs.startMatchBtn.addEventListener("click", () => send({ type: "start_match" })
 refs.rematchBtn.addEventListener("click", () => send({ type: "start_match" }));
 refs.leaveRoomBtn.addEventListener("click", () => send({ type: "leave_room" }));
 refs.leaveAfterMatchBtn.addEventListener("click", () => send({ type: "leave_room" }));
-refs.copyRoomBtn.addEventListener("click", copyRoomCode);
+refs.copyRoomBtn.addEventListener("click", copyRoomCodeSafe);
 refs.roomCodeInput.addEventListener("input", () => {
   refs.roomCodeInput.value = refs.roomCodeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5);
 });
@@ -436,4 +592,5 @@ window.setInterval(() => {
 
 renderer.resize();
 updateOverlays();
+updateLoadingOverlay();
 requestAnimationFrame(loop);
